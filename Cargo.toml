@@ -1,0 +1,20 @@
+[package]
+name          = "tcp-stream"
+version       = "0.0.0"
+authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
+edition       = "2018"
+description   = "Add features to mio's TcpStream"
+repository    = "https://github.com/Keruspe/tcp-stream"
+documentation = "https://docs.rs/tcp-stream"
+keywords      = ["tcp","mio"]
+categories    = ["network-programming"]
+license       = "BSD-2-Clause"
+
+[lib]
+name = "tcp_stream"
+
+[dependencies]
+
+[badges]
+travis-ci = { repository = "Keruspe/tcp-stream" }
+appveyor  = { repository = "Keruspe/tcp-stream" }
