@@ -11,6 +11,8 @@ use mio::{
     Evented, Poll, PollOpt, Ready, Token,
     tcp::TcpStream as MioTcpStream,
 };
+#[cfg(feature = "native-tls")]
+use native_tls;
 
 use std::{
     fmt,
@@ -19,10 +21,21 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-/// Wrapper around mio's TcpStream
+#[cfg(feature = "native-tls")]
+/// Reexport native_tls's TlsConnector
+pub use native_tls::TlsConnector as NativeTlsConnector;
+
+#[cfg(feature = "native-tls")]
+/// A TcpStream wrapped by native-tls
+pub type NativeTlsStream = native_tls::TlsStream<MioTcpStream>;
+
+/// Wrapper around plain or TLS TCP streams
 pub enum TcpStream {
     /// Wrapper around mio's TcpStream
     Plain(MioTcpStream),
+    #[cfg(feature = "native-tls")]
+    /// Wrapper around a TLS stream hanled by native-tls
+    NativeTls(NativeTlsStream),
 }
 
 impl TcpStream {
@@ -40,6 +53,26 @@ impl TcpStream {
     pub fn from_stream(stream: net::TcpStream) -> io::Result<Self> {
         Ok(MioTcpStream::from_stream(stream)?.into())
     }
+
+    /// Enable TLS
+    pub fn into_tls(self, domain: &str) -> io::Result<Self> {
+        #[cfg(feature = "native-tls")]
+        return self.into_native_tls(NativeTlsConnector::new().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain);
+        #[cfg(not(any(feature = "native-tls")))]
+        {
+            let _ = domain;
+            return Err(io::Error::new(io::ErrorKind::Other, "tls support disabled"));
+        }
+    }
+
+    #[cfg(feature = "native-tls")]
+    /// Enable TLS using native-tls
+    pub fn into_native_tls(self, connector: NativeTlsConnector, domain: &str) -> io::Result<Self> {
+        match self {
+            TcpStream::Plain(plain) => Ok(connector.connect(domain, plain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.into()), // FIXME: retry auto on WouldBlock?
+            _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
+        }
+    }
 }
 
 impl From<MioTcpStream> for TcpStream {
@@ -48,12 +81,21 @@ impl From<MioTcpStream> for TcpStream {
     }
 }
 
+#[cfg(feature = "native-tls")]
+impl From<NativeTlsStream> for TcpStream {
+    fn from(s: NativeTlsStream) -> Self {
+        TcpStream::NativeTls(s)
+    }
+}
+
 impl Deref for TcpStream {
     type Target = MioTcpStream;
 
     fn deref(&self) -> &Self::Target {
         match self {
-            TcpStream::Plain(plain) => plain,
+            TcpStream::Plain(plain)   => plain,
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(tls) => tls.get_ref(),
         }
     }
 }
@@ -62,6 +104,8 @@ impl DerefMut for TcpStream {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
             TcpStream::Plain(plain) => plain,
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(tls) => tls.get_mut(),
         }
     }
 }
@@ -69,7 +113,9 @@ impl DerefMut for TcpStream {
 impl Read for TcpStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
-            TcpStream::Plain(ref mut plain) => plain.read(buf),
+            TcpStream::Plain(ref mut plain)   => plain.read(buf),
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(ref mut tls) => tls.read(buf),
         }
     }
 }
@@ -77,13 +123,17 @@ impl Read for TcpStream {
 impl Write for TcpStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match self {
-            TcpStream::Plain(ref mut plain) => plain.write(buf),
+            TcpStream::Plain(ref mut plain)   => plain.write(buf),
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(ref mut tls) => tls.write(buf),
         }
     }
 
     fn flush(&mut self) -> io::Result<()> {
         match self {
-            TcpStream::Plain(ref mut plain) => plain.flush(),
+            TcpStream::Plain(ref mut plain)   => plain.flush(),
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(ref mut tls) => tls.flush(),
         }
     }
 }
