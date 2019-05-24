@@ -1,9 +1,9 @@
 [package]
 name          = "tcp-stream"
-version       = "0.0.0" # remember to update html_root_url
+version       = "0.1.0" # remember to update html_root_url
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2018"
-description   = "Add features to mio's TcpStream"
+description   = "mio's TcpStream on steroids"
 repository    = "https://github.com/Keruspe/tcp-stream"
 documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "mio", "io", "async", "non-blocking"]
