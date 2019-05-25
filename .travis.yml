@@ -19,7 +19,7 @@ matrix:
           os: osx
         - rust: nightly
           script:
-                - cargo -Z minimal-versions test --verbose --all
+                - cargo -Z minimal-versions test --verbose --all --all-features
 
 script:
     - cargo build --verbose --all
