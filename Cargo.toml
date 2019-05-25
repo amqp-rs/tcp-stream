@@ -29,6 +29,10 @@ optional = true
 version  = "^0.2"
 optional = true
 
+[dependencies.openssl]
+version  = "^0.10"
+optional = true
+
 [dependencies.tokio-io]
 version  = "^0.1.7"
 optional = true

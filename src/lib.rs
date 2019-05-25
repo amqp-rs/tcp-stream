@@ -23,12 +23,20 @@ use std::{
 };
 
 #[cfg(feature = "native-tls")]
-/// Reexport native_tls's TlsConnector
+/// Reexport native-tls's TlsConnector
 pub use native_tls::TlsConnector as NativeTlsConnector;
 
 #[cfg(feature = "native-tls")]
 /// A TcpStream wrapped by native-tls
 pub type NativeTlsStream = native_tls::TlsStream<MioTcpStream>;
+
+#[cfg(feature = "openssl")]
+/// Reexport openssl's TlsConnector
+pub use openssl::ssl::{SslConnector as OpenSslConnector, SslMethod as OpenSslMethod};
+
+#[cfg(feature = "openssl")]
+/// A TcpStream wrapped by openssl
+pub type OpenSslStream = openssl::ssl::SslStream<MioTcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
 pub enum TcpStream {
@@ -37,6 +45,9 @@ pub enum TcpStream {
     #[cfg(feature = "native-tls")]
     /// Wrapper around a TLS stream hanled by native-tls
     NativeTls(NativeTlsStream),
+    #[cfg(feature = "openssl")]
+    /// Wrapper around a TLS stream hanled by openssl
+    OpenSsl(OpenSslStream),
 }
 
 impl TcpStream {
@@ -68,12 +79,25 @@ impl TcpStream {
             _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
         }
     }
+
+    #[cfg(feature = "openssl")]
+    /// Enable TLS using openssl
+    pub fn into_openssl(self, connector: OpenSslConnector, domain: &str) -> io::Result<Self> {
+        match self {
+            TcpStream::Plain(plain) => Ok(connector.connect(domain, plain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.into()), // FIXME: retry auto on WouldBlock?
+            _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
+        }
+    }
 }
 
 cfg_if! {
     if #[cfg(feature = "native-tls")] {
         fn into_tls_impl(s: TcpStream, domain: &str) -> io::Result<TcpStream> {
             s.into_native_tls(NativeTlsConnector::new().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
+        }
+    } else if #[cfg(feature = "openssl")] {
+        fn into_tls_impl(s: TcpStream, domain: &str) -> io::Result<TcpStream> {
+            s.into_openssl(OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.build(), domain)
         }
     } else {
         fn into_tls_impl(_s: TcpStream, _domain: &str) -> io::Result<TcpStream> {
@@ -95,6 +119,13 @@ impl From<NativeTlsStream> for TcpStream {
     }
 }
 
+#[cfg(feature = "openssl")]
+impl From<OpenSslStream> for TcpStream {
+    fn from(s: OpenSslStream) -> Self {
+        TcpStream::OpenSsl(s)
+    }
+}
+
 impl Deref for TcpStream {
     type Target = MioTcpStream;
 
@@ -103,6 +134,8 @@ impl Deref for TcpStream {
             TcpStream::Plain(plain)   => plain,
             #[cfg(feature = "native-tls")]
             TcpStream::NativeTls(tls) => tls.get_ref(),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(tls)   => tls.get_ref(),
         }
     }
 }
@@ -110,9 +143,11 @@ impl Deref for TcpStream {
 impl DerefMut for TcpStream {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            TcpStream::Plain(plain) => plain,
+            TcpStream::Plain(plain)   => plain,
             #[cfg(feature = "native-tls")]
             TcpStream::NativeTls(tls) => tls.get_mut(),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(tls)   => tls.get_mut(),
         }
     }
 }
@@ -123,6 +158,8 @@ impl Read for TcpStream {
             TcpStream::Plain(ref mut plain)   => plain.read(buf),
             #[cfg(feature = "native-tls")]
             TcpStream::NativeTls(ref mut tls) => tls.read(buf),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(ref mut tls)   => tls.read(buf),
         }
     }
 }
@@ -133,6 +170,8 @@ impl Write for TcpStream {
             TcpStream::Plain(ref mut plain)   => plain.write(buf),
             #[cfg(feature = "native-tls")]
             TcpStream::NativeTls(ref mut tls) => tls.write(buf),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(ref mut tls)   => tls.write(buf),
         }
     }
 
@@ -141,6 +180,8 @@ impl Write for TcpStream {
             TcpStream::Plain(ref mut plain)   => plain.flush(),
             #[cfg(feature = "native-tls")]
             TcpStream::NativeTls(ref mut tls) => tls.flush(),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(ref mut tls)   => tls.flush(),
         }
     }
 }
