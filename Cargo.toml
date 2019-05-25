@@ -18,7 +18,8 @@ default = ["native-tls"]
 tokio   = ["futures", "tokio-io"]
 
 [dependencies]
-mio = '^0.6.14'
+cfg-if = "^0.1.5"
+mio    = '^0.6.14'
 
 [dependencies.futures]
 version  = "^0.1"

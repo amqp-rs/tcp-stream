@@ -7,6 +7,7 @@
 //! tcp-stream is a library aiming at providing TLS and futures/tokio
 //! support to mio's TcpStream without forcibly using tokio-reactor
 
+use cfg_if::cfg_if;
 use mio::{
     Evented, Poll, PollOpt, Ready, Token,
     tcp::TcpStream as MioTcpStream,
@@ -56,13 +57,7 @@ impl TcpStream {
 
     /// Enable TLS
     pub fn into_tls(self, domain: &str) -> io::Result<Self> {
-        #[cfg(feature = "native-tls")]
-        return self.into_native_tls(NativeTlsConnector::new().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain);
-        #[cfg(not(any(feature = "native-tls")))]
-        {
-            let _ = domain;
-            return Err(io::Error::new(io::ErrorKind::Other, "tls support disabled"));
-        }
+        into_tls_impl(self, domain)
     }
 
     #[cfg(feature = "native-tls")]
@@ -71,6 +66,18 @@ impl TcpStream {
         match self {
             TcpStream::Plain(plain) => Ok(connector.connect(domain, plain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.into()), // FIXME: retry auto on WouldBlock?
             _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
+        }
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "native-tls")] {
+        fn into_tls_impl(s: TcpStream, domain: &str) -> io::Result<TcpStream> {
+            s.into_native_tls(NativeTlsConnector::new().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
+        }
+    } else {
+        fn into_tls_impl(_s: TcpStream, _domain: &str) -> io::Result<TcpStream> {
+            Err(io::Error::new(io::ErrorKind::Other, "tls support disabled"))
         }
     }
 }
