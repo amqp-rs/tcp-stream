@@ -42,6 +42,9 @@ optional = true
 version  = "^0.1.7"
 optional = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [badges]
 travis-ci = { repository = "Keruspe/tcp-stream" }
 appveyor  = { repository = "Keruspe/tcp-stream" }
