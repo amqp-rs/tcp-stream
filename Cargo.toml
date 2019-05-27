@@ -15,6 +15,7 @@ name = "tcp_stream"
 
 [features]
 default = ["native-tls"]
+rustls  = ["rustls-connector"]
 tokio   = ["futures", "tokio-io"]
 
 [dependencies]
@@ -31,6 +32,10 @@ optional = true
 
 [dependencies.openssl]
 version  = "^0.10"
+optional = true
+
+[dependencies.rustls-connector]
+version  = "^0.6"
 optional = true
 
 [dependencies.tokio-io]

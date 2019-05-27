@@ -12,8 +12,6 @@ use mio::{
     Evented, Poll, PollOpt, Ready, Token,
     tcp::TcpStream as MioTcpStream,
 };
-#[cfg(feature = "native-tls")]
-use native_tls;
 
 use std::{
     fmt,
@@ -38,6 +36,14 @@ pub use openssl::ssl::{SslConnector as OpenSslConnector, SslMethod as OpenSslMet
 /// A TcpStream wrapped by openssl
 pub type OpenSslStream = openssl::ssl::SslStream<MioTcpStream>;
 
+#[cfg(feature = "rustls")]
+/// Reexport rustls-connector's TlsConnector
+pub use rustls_connector::RustlsConnector;
+
+#[cfg(feature = "rustls")]
+/// A TcpStream wrapped by rustls
+pub type RustlsStream = rustls_connector::TlsStream<MioTcpStream>;
+
 /// Wrapper around plain or TLS TCP streams
 pub enum TcpStream {
     /// Wrapper around mio's TcpStream
@@ -48,6 +54,9 @@ pub enum TcpStream {
     #[cfg(feature = "openssl")]
     /// Wrapper around a TLS stream hanled by openssl
     OpenSsl(OpenSslStream),
+    #[cfg(feature = "rustls")]
+    /// Wrapper around a TLS stream hanled by rustls
+    Rustls(RustlsStream),
 }
 
 impl TcpStream {
@@ -88,6 +97,15 @@ impl TcpStream {
             _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
         }
     }
+
+    #[cfg(feature = "rustls")]
+    /// Enable TLS using rustls
+    pub fn into_rustls(self, connector: RustlsConnector, domain: &str) -> io::Result<Self> {
+        match self {
+            TcpStream::Plain(plain) => Ok(connector.connect(domain, plain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.into()), // FIXME: retry auto on WouldBlock?
+            _                       => Err(io::Error::new(io::ErrorKind::AlreadyExists, "already a TLS stream")),
+        }
+    }
 }
 
 cfg_if! {
@@ -98,6 +116,10 @@ cfg_if! {
     } else if #[cfg(feature = "openssl")] {
         fn into_tls_impl(s: TcpStream, domain: &str) -> io::Result<TcpStream> {
             s.into_openssl(OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.build(), domain)
+        }
+    } else if #[cfg(feature = "rustls")] {
+        fn into_tls_impl(s: TcpStream, domain: &str) -> io::Result<TcpStream> {
+            s.into_rustls(RustlsConnector::default(), domain)
         }
     } else {
         fn into_tls_impl(_s: TcpStream, _domain: &str) -> io::Result<TcpStream> {
@@ -126,6 +148,13 @@ impl From<OpenSslStream> for TcpStream {
     }
 }
 
+#[cfg(feature = "rustls")]
+impl From<RustlsStream> for TcpStream {
+    fn from(s: RustlsStream) -> Self {
+        TcpStream::Rustls(s)
+    }
+}
+
 impl Deref for TcpStream {
     type Target = MioTcpStream;
 
@@ -136,6 +165,9 @@ impl Deref for TcpStream {
             TcpStream::NativeTls(tls) => tls.get_ref(),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls)   => tls.get_ref(),
+            #[cfg(feature = "rustls")]
+            // FIXME: https://github.com/ctz/rustls/pull/254
+            TcpStream::Rustls(tls)    => &tls.sock,
         }
     }
 }
@@ -148,6 +180,9 @@ impl DerefMut for TcpStream {
             TcpStream::NativeTls(tls) => tls.get_mut(),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls)   => tls.get_mut(),
+            #[cfg(feature = "rustls")]
+            // FIXME: https://github.com/ctz/rustls/pull/254
+            TcpStream::Rustls(tls)    => &mut tls.sock,
         }
     }
 }
@@ -160,6 +195,8 @@ impl Read for TcpStream {
             TcpStream::NativeTls(ref mut tls) => tls.read(buf),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(ref mut tls)   => tls.read(buf),
+            #[cfg(feature = "rustls")]
+            TcpStream::Rustls(ref mut tls)    => tls.read(buf),
         }
     }
 }
@@ -172,6 +209,8 @@ impl Write for TcpStream {
             TcpStream::NativeTls(ref mut tls) => tls.write(buf),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(ref mut tls)   => tls.write(buf),
+            #[cfg(feature = "rustls")]
+            TcpStream::Rustls(ref mut tls)    => tls.write(buf),
         }
     }
 
@@ -182,6 +221,8 @@ impl Write for TcpStream {
             TcpStream::NativeTls(ref mut tls) => tls.flush(),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(ref mut tls)   => tls.flush(),
+            #[cfg(feature = "rustls")]
+            TcpStream::Rustls(ref mut tls)    => tls.flush(),
         }
     }
 }
