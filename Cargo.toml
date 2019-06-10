@@ -19,6 +19,7 @@ dangerous_configuration = ["rustls-connector/dangerous_configuration"]
 quic                    = ["rustls-connector/quic"]
 rustls                  = ["rustls-connector"]
 tokio                   = ["futures", "tokio-io"]
+vendored                = ["openssl/vendored"]
 
 [dependencies]
 cfg-if = "^0.1.5"
