@@ -108,22 +108,22 @@ impl TcpStream {
     #[cfg(feature = "native-tls")]
     /// Enable TLS using native-tls
     pub fn into_native_tls(self, connector: NativeTlsConnector, domain: &str) -> Result<Self, HandshakeError> {
-        Ok(connector.connect(domain, self.as_plain()?)?.into())
+        Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
     #[cfg(feature = "openssl")]
     /// Enable TLS using openssl
     pub fn into_openssl(self, connector: OpenSslConnector, domain: &str) -> Result<Self, HandshakeError> {
-        Ok(connector.connect(domain, self.as_plain()?)?.into())
+        Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
     #[cfg(feature = "rustls")]
     /// Enable TLS using rustls
     pub fn into_rustls(self, connector: RustlsConnector, domain: &str) -> Result<Self, HandshakeError> {
-        Ok(connector.connect(domain, self.as_plain()?)?.into())
+        Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
-    fn as_plain(self) -> Result<MioTcpStream, io::Error> {
+    fn into_plain(self) -> Result<MioTcpStream, io::Error> {
         if let TcpStream::Plain(plain) = self {
             Ok(plain)
         } else {
