@@ -14,9 +14,11 @@ license       = "BSD-2-Clause"
 name = "tcp_stream"
 
 [features]
-default = ["native-tls"]
-rustls  = ["rustls-connector"]
-tokio   = ["futures", "tokio-io"]
+default                 = ["native-tls"]
+dangerous_configuration = ["rustls-connector/dangerous_configuration"]
+quic                    = ["rustls-connector/quic"]
+rustls                  = ["rustls-connector"]
+tokio                   = ["futures", "tokio-io"]
 
 [dependencies]
 cfg-if = "^0.1.5"
@@ -35,7 +37,7 @@ version  = "^0.10"
 optional = true
 
 [dependencies.rustls-connector]
-version  = "^0.6"
+version  = "^0.7"
 optional = true
 
 [dependencies.tokio-io]
