@@ -2,10 +2,43 @@
 #![warn(rust_2018_idioms)]
 #![doc(html_root_url = "https://docs.rs/tcp-stream/0.2.1/")]
 
-//! # Improve mio's TCP stream handling
+//! # mio's TCP stream on steroids
 //!
 //! tcp-stream is a library aiming at providing TLS and futures/tokio
 //! support to mio's TcpStream without forcibly using tokio-reactor
+//!
+//! # Examples
+//!
+//! To connect to a remote server:
+//!
+//! ```rust
+//! use tcp_stream::{HandshakeError, TcpStream};
+//!
+//! use std::io::{self, Read, Write};
+//!
+//! fn main() {
+//!     let stream = std::net::TcpStream::connect("google.com:443").unwrap();
+//!     let stream = TcpStream::from_stream(stream).unwrap();
+//!     let mut stream = stream.into_tls("google.com");
+//!
+//!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
+//!         stream = mid_handshake.handshake();
+//!     }
+//!
+//!     let mut stream = stream.unwrap();
+//!
+//!     stream.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+//!     stream.flush().unwrap();
+//!     let mut res = vec![];
+//!     while let Err(err) = stream.read_to_end(&mut res) {
+//!         if err.kind() != io::ErrorKind::WouldBlock {
+//!             eprintln!("stream error: {:?}", err);
+//!             break;
+//!         }
+//!     }
+//!     println!("{}", String::from_utf8_lossy(&res));
+//! }
+//! ```
 
 use cfg_if::cfg_if;
 use mio::{
