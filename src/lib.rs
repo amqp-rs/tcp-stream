@@ -17,8 +17,7 @@
 //! use std::io::{self, Read, Write};
 //!
 //! fn main() {
-//!     let stream = std::net::TcpStream::connect("google.com:443").unwrap();
-//!     let stream = TcpStream::from_stream(stream).unwrap();
+//!     let stream = TcpStream::connect("google.com:443").unwrap();
 //!     let mut stream = stream.into_tls("google.com");
 //!
 //!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
