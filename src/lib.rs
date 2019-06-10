@@ -17,7 +17,7 @@ use std::{
     error::Error,
     fmt,
     io::{self, Read, Write},
-    net::{self, SocketAddr},
+    net::{self, SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
 };
 
@@ -86,9 +86,17 @@ pub enum TcpStream {
 }
 
 impl TcpStream {
-    /// Wrapper around mio's TcpStream::connect
-    pub fn connect(addr: &SocketAddr) -> io::Result<Self> {
-        Ok(MioTcpStream::connect(addr)?.into())
+    /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
+        let addrs   = addr.to_socket_addrs()?;
+        let mut err = None;
+        for addr in addrs {
+            match MioTcpStream::connect(&addr) {
+                Ok(stream) => return Ok(stream.into()),
+                Err(error) => err = Some(error),
+            }
+        }
+        Err(err.unwrap_or_else(|| io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")))
     }
 
     /// Wrapper around mio's TcpStream::connect_stream
