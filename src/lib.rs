@@ -70,6 +70,7 @@ pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<M
 pub type RustlsHandshakeError = rustls_connector::HandshakeError<MioTcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
+#[allow(clippy::large_enum_variant)]
 pub enum TcpStream {
     /// Wrapper around mio's TcpStream
     Plain(MioTcpStream),
@@ -272,6 +273,7 @@ impl fmt::Debug for TcpStream {
 }
 
 /// A TLS stream which has been interrupted during the handshake
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum MidHandshakeTlsStream {
     #[cfg(feature = "native-tls")]
@@ -351,6 +353,7 @@ impl fmt::Display for MidHandshakeTlsStream {
 }
 
 /// An error returned while performing the handshake
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum HandshakeError {
     /// We hit WouldBlock during handshake
