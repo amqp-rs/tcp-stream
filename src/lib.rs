@@ -302,7 +302,7 @@ impl Evented for TcpStream {
     }
 
     fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        poll.deregister(self)
+        <MioTcpStream as Evented>::deregister(self, poll)
     }
 }
 
