@@ -1,4 +1,4 @@
-use mio::tcp::TcpStream as MioTcpStream;
+use mio::net::TcpStream as MioTcpStream;
 
 use crate::TcpStream;
 

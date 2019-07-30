@@ -43,13 +43,13 @@
 //! ```
 
 use cfg_if::cfg_if;
-use mio::{tcp::TcpStream as MioTcpStream, Evented, Poll, PollOpt, Ready, Token};
+use mio::net::TcpStream as MioTcpStream;
 
 use std::{
     error::Error,
     fmt,
     io::{self, Read, Write},
-    net::{self, SocketAddr, ToSocketAddrs},
+    net::{self, ToSocketAddrs},
     ops::{Deref, DerefMut},
 };
 
@@ -136,7 +136,7 @@ impl TcpStream {
         let addrs = addr.to_socket_addrs()?;
         let mut err = None;
         for addr in addrs {
-            match MioTcpStream::connect(&addr) {
+            match MioTcpStream::connect(addr) {
                 Ok(stream) => return Ok(stream.into()),
                 Err(error) => err = Some(error),
             }
@@ -146,14 +146,9 @@ impl TcpStream {
         }))
     }
 
-    /// Wrapper around mio's TcpStream::connect_stream
-    pub fn connect_stream(stream: net::TcpStream, addr: &SocketAddr) -> io::Result<Self> {
-        Ok(MioTcpStream::connect_stream(stream, addr)?.into())
-    }
-
-    /// Wrapper around mio's TcpStream::from_stream
-    pub fn from_stream(stream: net::TcpStream) -> io::Result<Self> {
-        Ok(MioTcpStream::from_stream(stream)?.into())
+    /// Wrapper around mio's TcpStream::from_std
+    pub fn from_std(stream: net::TcpStream) -> Self {
+        MioTcpStream::from_std(stream).into()
     }
 
     /// Enable TLS
@@ -347,32 +342,6 @@ impl Write for TcpStream {
             #[cfg(feature = "rustls-connector")]
             TcpStream::Rustls(ref mut tls) => tls.flush(),
         }
-    }
-}
-
-impl Evented for TcpStream {
-    fn register(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        <MioTcpStream as Evented>::register(self, poll, token, interest, opts)
-    }
-
-    fn reregister(
-        &self,
-        poll: &Poll,
-        token: Token,
-        interest: Ready,
-        opts: PollOpt,
-    ) -> io::Result<()> {
-        <MioTcpStream as Evented>::reregister(self, poll, token, interest, opts)
-    }
-
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        <MioTcpStream as Evented>::deregister(self, poll)
     }
 }
 
