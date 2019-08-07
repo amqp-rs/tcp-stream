@@ -164,6 +164,7 @@ impl TcpStream {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
+    #[cfg(any(feature = "native-tls", feature = "openssl", feature = "rustls"))]
     fn into_plain(self) -> Result<MioTcpStream, io::Error> {
         if let TcpStream::Plain(plain) = self {
             Ok(plain)
@@ -188,7 +189,7 @@ cfg_if! {
         }
     } else {
         fn into_tls_impl(_s: TcpStream, _domain: &str) -> Result<TcpStream, HandshakeError> {
-            Err(io::Error::new(io::ErrorKind::Other, "tls support disabled"))
+            Err(HandshakeError::Failure(io::Error::new(io::ErrorKind::Other, "tls support disabled")))
         }
     }
 }
@@ -316,6 +317,8 @@ impl fmt::Debug for TcpStream {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum MidHandshakeTlsStream {
+    /// Not a TLS stream
+    Plain(MioTcpStream),
     #[cfg(feature = "native-tls")]
     /// A native-tls MidHandshakeTlsStream
     NativeTls(NativeTlsMidHandshakeTlsStream),
@@ -331,6 +334,7 @@ impl MidHandshakeTlsStream {
     /// Get a reference to the inner stream
     pub fn get_ref(&self) -> &MioTcpStream {
         match self {
+            MidHandshakeTlsStream::Plain(mid)     => mid,
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mid) => mid.get_ref(),
             #[cfg(feature = "openssl")]
@@ -343,6 +347,7 @@ impl MidHandshakeTlsStream {
     /// Get a mutable reference to the inner stream
     pub fn get_mut(&mut self) -> &MioTcpStream {
         match self {
+            MidHandshakeTlsStream::Plain(mid)     => mid,
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mid) => mid.get_mut(),
             #[cfg(feature = "openssl")]
@@ -355,6 +360,7 @@ impl MidHandshakeTlsStream {
     /// Retry the handshake
     pub fn handshake(self) -> Result<TcpStream, HandshakeError> {
         Ok(match self {
+            MidHandshakeTlsStream::Plain(mid)     => TcpStream::Plain(mid),
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mid) => mid.handshake()?.into(),
             #[cfg(feature = "openssl")]
