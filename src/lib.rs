@@ -167,6 +167,7 @@ impl TcpStream {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
+    #[allow(irrefutable_let_patterns)]
     fn into_plain(self) -> Result<MioTcpStream, io::Error> {
         if let TcpStream::Plain(plain) = self {
             Ok(plain)
@@ -191,7 +192,7 @@ cfg_if! {
         }
     } else {
         fn into_tls_impl(s: TcpStream, _domain: &str) -> Result<TcpStream, HandshakeError> {
-            Ok(s)
+            Ok(TcpStream::Plain(s.into_plain()?))
         }
     }
 }
