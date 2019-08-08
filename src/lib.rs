@@ -26,13 +26,16 @@
 //!
 //!     let mut stream = stream.unwrap();
 //!
-//!     stream.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+//!     while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
+//!         if err.kind() != io::ErrorKind::WouldBlock {
+//!             panic!("error: {:?}", err);
+//!         }
+//!     }
 //!     stream.flush().unwrap();
 //!     let mut res = vec![];
 //!     while let Err(err) = stream.read_to_end(&mut res) {
 //!         if err.kind() != io::ErrorKind::WouldBlock {
-//!             eprintln!("stream error: {:?}", err);
-//!             break;
+//!             panic!("stream error: {:?}", err);
 //!         }
 //!     }
 //!     println!("{}", String::from_utf8_lossy(&res));
@@ -187,8 +190,8 @@ cfg_if! {
             s.into_rustls(RustlsConnector::default(), domain)
         }
     } else {
-        fn into_tls_impl(_s: TcpStream, _domain: &str) -> Result<TcpStream, HandshakeError> {
-            Err(HandshakeError::Failure(io::Error::new(io::ErrorKind::Other, "tls support disabled")))
+        fn into_tls_impl(s: TcpStream, _domain: &str) -> Result<TcpStream, HandshakeError> {
+            Ok(s)
         }
     }
 }
