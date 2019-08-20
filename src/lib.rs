@@ -249,8 +249,7 @@ impl Deref for TcpStream {
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls) => tls.get_ref(),
             #[cfg(feature = "rustls")]
-            // FIXME: https://github.com/ctz/rustls/pull/254
-            TcpStream::Rustls(tls) => &tls.sock,
+            TcpStream::Rustls(tls) => tls.get_ref(),
         }
     }
 }
@@ -264,8 +263,7 @@ impl DerefMut for TcpStream {
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls) => tls.get_mut(),
             #[cfg(feature = "rustls")]
-            // FIXME: https://github.com/ctz/rustls/pull/254
-            TcpStream::Rustls(tls) => &mut tls.sock,
+            TcpStream::Rustls(tls) => tls.get_mut(),
         }
     }
 }
