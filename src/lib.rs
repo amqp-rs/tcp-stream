@@ -18,7 +18,7 @@
 //!
 //! fn main() {
 //!     let stream = TcpStream::connect("google.com:443").unwrap();
-//!     let mut stream = stream.into_tls("google.com");
+//!     let mut stream = stream.into_tls("google.com", None);
 //!
 //!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
 //!         stream = mid_handshake.handshake();
@@ -117,6 +117,15 @@ pub enum TcpStream {
     Rustls(RustlsStream),
 }
 
+/// Holds PKCS#12 DER-encoded identity and decryption password
+#[derive(Debug, PartialEq)]
+pub struct Identity<'a, 'b> {
+    /// PKCS#12 DER-encoded identity
+    pub der: &'a [u8],
+    /// Decryption password
+    pub password: &'b str,
+}
+
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
@@ -144,8 +153,8 @@ impl TcpStream {
     }
 
     /// Enable TLS
-    pub fn into_tls(self, domain: &str) -> Result<Self, HandshakeError> {
-        into_tls_impl(self, domain)
+    pub fn into_tls(self, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<Self, HandshakeError> {
+        into_tls_impl(self, domain, identity)
     }
 
     #[cfg(feature = "native-tls")]
@@ -193,19 +202,35 @@ impl TcpStream {
 
 cfg_if! {
     if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str) -> Result<TcpStream, HandshakeError> {
-            s.into_native_tls(NativeTlsConnector::new().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            let mut builder = NativeTlsConnector::builder();
+            if let Some(identity) = identity {
+                builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+            }
+            s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str) -> Result<TcpStream, HandshakeError> {
-            s.into_openssl(OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.build(), domain)
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            let builder = OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            if let Some(identity) = identity {
+                let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
+                builder.set_certificate(identity.0.cert)?;
+                builder.set_private_key(identity.0.pkey)?;
+                if let Some(ref chain) = identity.0.chain {
+                    for cert in chain.iter().rev() {
+                        builder.add_extra_chain_cert(cert.to_owned())?;
+                    }
+                }
+            }
+            s.into_openssl(builder.build(), domain)
         }
     } else if #[cfg(feature = "rustls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            // FIXME: identity
             s.into_rustls(RustlsConnector::default(), domain)
         }
     } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
             Ok(TcpStream::Plain(s.into_plain()?))
         }
     }
@@ -263,7 +288,7 @@ impl DerefMut for TcpStream {
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls) => tls.get_mut(),
             #[cfg(feature = "rustls")]
-            TcpStream::Rustls(tls) => tls.get_mut(),
+            TcpStream::Rustls(tls) => &mut tls.sock, // FIXME: get_mut
         }
     }
 }
