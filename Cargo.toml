@@ -18,16 +18,11 @@ default                 = ["native-tls"]
 dangerous_configuration = ["rustls-connector/dangerous_configuration"]
 quic                    = ["rustls-connector/quic"]
 rustls                  = ["rustls-connector"]
-tokio                   = ["futures", "tokio-io"]
 vendored                = ["openssl/vendored"]
 
 [dependencies]
 cfg-if = "^0.1.5"
 mio    = '^0.6.14'
-
-[dependencies.futures]
-version  = "^0.1"
-optional = true
 
 [dependencies.native-tls]
 version  = "^0.2"
@@ -39,10 +34,6 @@ optional = true
 
 [dependencies.rustls-connector]
 version  = "^0.8"
-optional = true
-
-[dependencies.tokio-io]
-version  = "^0.1.7"
 optional = true
 
 [package.metadata.docs.rs]

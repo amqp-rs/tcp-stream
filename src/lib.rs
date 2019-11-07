@@ -524,6 +524,3 @@ impl From<io::Error> for HandshakeError {
 }
 #[cfg(unix)]
 mod unix;
-
-#[cfg(feature = "tokio")]
-mod tokio;
