@@ -215,7 +215,7 @@ cfg_if! {
         }
     } else if #[cfg(feature = "openssl")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
-            let mut builder = OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
             if let Some(identity) = identity {
                 let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
                 builder.set_certificate(&identity.cert)?;
@@ -503,7 +503,7 @@ impl From<OpenSslHandshakeError> for HandshakeError {
                 HandshakeError::Failure(io::Error::new(io::ErrorKind::Other, failure.into_error()))
             }
             openssl::ssl::HandshakeError::SetupFailure(failure) => {
-                HandshakeError::Failure(io::Error::new(io::ErrorKind::Other, failure))
+                failure.into()
             }
         }
     }
