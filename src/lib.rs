@@ -85,6 +85,10 @@ pub type OpenSslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<MioT
 /// A HandshakeError from openssl
 pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<MioTcpStream>;
 
+#[cfg(feature = "openssl")]
+/// An ErrorStack from openssl
+pub type OpenSslErrorStack = openssl::error::ErrorStack;
+
 #[cfg(feature = "rustls")]
 /// Reexport rustls-connector's TlsConnector
 pub use rustls_connector::RustlsConnector;
@@ -211,12 +215,12 @@ cfg_if! {
         }
     } else if #[cfg(feature = "openssl")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
-            let builder = OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            let mut builder = OpenSslConnector::builder(OpenSslMethod::tls()).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             if let Some(identity) = identity {
                 let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
-                builder.set_certificate(identity.0.cert)?;
-                builder.set_private_key(identity.0.pkey)?;
-                if let Some(ref chain) = identity.0.chain {
+                builder.set_certificate(&identity.cert)?;
+                builder.set_private_key(&identity.pkey)?;
+                if let Some(chain) = identity.chain.as_ref() {
                     for cert in chain.iter().rev() {
                         builder.add_extra_chain_cert(cert.to_owned())?;
                     }
@@ -505,6 +509,12 @@ impl From<OpenSslHandshakeError> for HandshakeError {
     }
 }
 
+#[cfg(feature = "openssl")]
+impl From<OpenSslErrorStack> for HandshakeError {
+    fn from(error: OpenSslErrorStack) -> Self {
+        Self::Failure(error.into())
+    }
+}
 #[cfg(feature = "rustls")]
 impl From<RustlsHandshakeError> for HandshakeError {
     fn from(error: RustlsHandshakeError) -> Self {
