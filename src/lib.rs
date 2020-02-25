@@ -228,6 +228,11 @@ cfg_if! {
             }
             s.into_openssl(builder.build(), domain)
         }
+    } else if #[cfg(feature = "rustls-native-certs")] {
+        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            // FIXME: identity
+            s.into_rustls(RustlsConnector::new_with_native_certs()?, domain)
+        }
     } else if #[cfg(feature = "rustls")] {
         fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
             // FIXME: identity
