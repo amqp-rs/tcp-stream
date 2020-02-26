@@ -205,13 +205,15 @@ impl TcpStream {
 }
 
 cfg_if! {
-    if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
-            let mut builder = NativeTlsConnector::builder();
-            if let Some(identity) = identity {
-                builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
-            }
-            s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
+    if #[cfg(feature = "rustls-native-certs")] {
+        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            // FIXME: identity
+            s.into_rustls(RustlsConnector::new_with_native_certs()?, domain)
+        }
+    } else if #[cfg(feature = "rustls")] {
+        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            // FIXME: identity
+            s.into_rustls(RustlsConnector::default(), domain)
         }
     } else if #[cfg(feature = "openssl")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
@@ -228,15 +230,13 @@ cfg_if! {
             }
             s.into_openssl(builder.build(), domain)
         }
-    } else if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
-            // FIXME: identity
-            s.into_rustls(RustlsConnector::new_with_native_certs()?, domain)
-        }
-    } else if #[cfg(feature = "rustls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
-            // FIXME: identity
-            s.into_rustls(RustlsConnector::default(), domain)
+    } else if #[cfg(feature = "native-tls")] {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+            let mut builder = NativeTlsConnector::builder();
+            if let Some(identity) = identity {
+                builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+            }
+            s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
         fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
