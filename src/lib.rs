@@ -43,7 +43,7 @@
 //! ```
 
 use cfg_if::cfg_if;
-use mio::net::TcpStream as MioTcpStream;
+use mio::{Interest, Registry, Token, event::Source, net::TcpStream as MioTcpStream};
 
 use std::{
     error::Error,
@@ -342,6 +342,30 @@ impl Write for TcpStream {
             #[cfg(feature = "rustls-connector")]
             TcpStream::Rustls(ref mut tls) => tls.flush(),
         }
+    }
+}
+
+impl Source for TcpStream {
+    fn register(
+        &mut self,
+        registry: &Registry,
+        token: Token,
+        interests: Interest,
+    ) -> io::Result<()> {
+        <MioTcpStream as Source>::register(self, registry, token, interests)
+    }
+
+    fn reregister(
+        &mut self,
+        registry: &Registry,
+        token: Token,
+        interests: Interest,
+    ) -> io::Result<()> {
+        <MioTcpStream as Source>::reregister(self, registry, token, interests)
+    }
+
+    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
+        <MioTcpStream as Source>::deregister(self, registry)
     }
 }
 
