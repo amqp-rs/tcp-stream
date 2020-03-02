@@ -14,12 +14,13 @@ license       = "BSD-2-Clause"
 name = "tcp_stream"
 
 [features]
-default                 = ["native-tls"]
-dangerous_configuration = ["rustls-connector/dangerous_configuration"]
-quic                    = ["rustls-connector/quic"]
-rustls                  = ["rustls-connector"]
-rustls-native-certs     = ["rustls", "rustls-connector/native_certs"]
-vendored                = ["openssl/vendored"]
+default                   = ["native-tls"]
+dangerous-configuration   = ["rustls-connector/dangerous-configuration"]
+quic                      = ["rustls-connector/quic"]
+rustls                    = ["rustls-native-certs"]
+rustls-webpki-roots-certs = ["rustls-connector", "rustls-connector/webpki-roots-certs"]
+rustls-native-certs       = ["rustls-connector", "rustls-connector/native-certs"]
+vendored                  = ["openssl/vendored"]
 
 [dependencies]
 cfg-if = "^0.1.5"
@@ -34,8 +35,9 @@ version  = "^0.10"
 optional = true
 
 [dependencies.rustls-connector]
-version  = "^0.9.2"
-optional = true
+version          = "^0.10"
+optional         = true
+default-features = false
 
 [package.metadata.docs.rs]
 all-features = true
