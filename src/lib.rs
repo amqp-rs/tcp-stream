@@ -43,7 +43,7 @@
 //! ```
 
 use cfg_if::cfg_if;
-use mio::{Interest, Registry, Token, event::Source, net::TcpStream as MioTcpStream};
+use mio::{event::Source, net::TcpStream as MioTcpStream, Interest, Registry, Token};
 
 use std::{
     error::Error,
@@ -152,7 +152,11 @@ impl TcpStream {
     }
 
     /// Enable TLS
-    pub fn into_tls(self, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<Self, HandshakeError> {
+    pub fn into_tls(
+        self,
+        domain: &str,
+        identity: Option<Identity<'_, '_>>,
+    ) -> Result<Self, HandshakeError> {
         into_tls_impl(self, domain, identity)
     }
 
@@ -200,7 +204,12 @@ impl TcpStream {
 }
 
 #[cfg(feature = "rustls-connector")]
-fn into_rustls_common(s: TcpStream, c: RustlsConnector, domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+fn into_rustls_common(
+    s: TcpStream,
+    c: RustlsConnector,
+    domain: &str,
+    _: Option<Identity<'_, '_>>,
+) -> Result<TcpStream, HandshakeError> {
     // FIXME: identity
     s.into_rustls(c, domain)
 }
@@ -508,9 +517,7 @@ impl From<OpenSslHandshakeError> for HandshakeError {
             openssl::ssl::HandshakeError::Failure(failure) => {
                 HandshakeError::Failure(io::Error::new(io::ErrorKind::Other, failure.into_error()))
             }
-            openssl::ssl::HandshakeError::SetupFailure(failure) => {
-                failure.into()
-            }
+            openssl::ssl::HandshakeError::SetupFailure(failure) => failure.into(),
         }
     }
 }
