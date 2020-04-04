@@ -48,7 +48,7 @@ use mio::{event::Source, net::TcpStream as MioTcpStream, Interest, Registry, Tok
 use std::{
     error::Error,
     fmt,
-    io::{self, Read, Write},
+    io::{self, IoSlice, IoSliceMut, Read, Write},
     net::{self, ToSocketAddrs},
     ops::{Deref, DerefMut},
 };
@@ -314,43 +314,61 @@ impl DerefMut for TcpStream {
     }
 }
 
+macro_rules! fwd_impl {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        match $self {
+            TcpStream::Plain(ref mut plain) => plain.$method($($args),*),
+            #[cfg(feature = "native-tls")]
+            TcpStream::NativeTls(ref mut tls) => tls.$method($($args),*),
+            #[cfg(feature = "openssl")]
+            TcpStream::OpenSsl(ref mut tls) => tls.$method($($args),*),
+            #[cfg(feature = "rustls-connector")]
+            TcpStream::Rustls(ref mut tls) => tls.$method($($args),*),
+        }
+    };
+}
+
 impl Read for TcpStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            TcpStream::Plain(ref mut plain) => plain.read(buf),
-            #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(ref mut tls) => tls.read(buf),
-            #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(ref mut tls) => tls.read(buf),
-            #[cfg(feature = "rustls-connector")]
-            TcpStream::Rustls(ref mut tls) => tls.read(buf),
-        }
+        fwd_impl!(self, read, buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
+        fwd_impl!(self, read_vectored, bufs)
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+        fwd_impl!(self, read_to_end, buf)
+    }
+
+    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
+        fwd_impl!(self, read_to_string, buf)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        fwd_impl!(self, read_exact, buf)
     }
 }
 
 impl Write for TcpStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match self {
-            TcpStream::Plain(ref mut plain) => plain.write(buf),
-            #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(ref mut tls) => tls.write(buf),
-            #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(ref mut tls) => tls.write(buf),
-            #[cfg(feature = "rustls-connector")]
-            TcpStream::Rustls(ref mut tls) => tls.write(buf),
-        }
+        fwd_impl!(self, write, buf)
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        match self {
-            TcpStream::Plain(ref mut plain) => plain.flush(),
-            #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(ref mut tls) => tls.flush(),
-            #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(ref mut tls) => tls.flush(),
-            #[cfg(feature = "rustls-connector")]
-            TcpStream::Rustls(ref mut tls) => tls.flush(),
-        }
+        fwd_impl!(self, flush,)
+    }
+
+    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+        fwd_impl!(self, write_vectored, bufs)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        fwd_impl!(self, write_all, buf)
+    }
+
+    fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
+        fwd_impl!(self, write_fmt, fmt)
     }
 }
 
