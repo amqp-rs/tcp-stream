@@ -398,7 +398,7 @@ impl Source for TcpStream {
 
 impl fmt::Debug for TcpStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        <MioTcpStream as fmt::Debug>::fmt(self, f)
+        f.debug_struct("TcpStream").field("inner", self.deref()).finish()
     }
 }
 
@@ -483,7 +483,7 @@ impl From<RustlsMidHandshakeTlsStream> for MidHandshakeTlsStream {
 
 impl fmt::Display for MidHandshakeTlsStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MidHandshakeTlsStream")
+        f.write_str("MidHandshakeTlsStream")
     }
 }
 
@@ -500,8 +500,8 @@ pub enum HandshakeError {
 impl fmt::Display for HandshakeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HandshakeError::WouldBlock(_) => write!(f, "WouldBlock hit during handshake"),
-            HandshakeError::Failure(err) => write!(f, "IO error: {}", err),
+            HandshakeError::WouldBlock(_) => f.write_str("WouldBlock hit during handshake"),
+            HandshakeError::Failure(err) => f.write_fmt(format_args!("IO error: {}", err)),
         }
     }
 }
@@ -563,5 +563,6 @@ impl From<io::Error> for HandshakeError {
         HandshakeError::Failure(err)
     }
 }
+
 #[cfg(unix)]
 mod unix;
