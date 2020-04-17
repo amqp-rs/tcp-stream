@@ -398,7 +398,9 @@ impl Source for TcpStream {
 
 impl fmt::Debug for TcpStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("TcpStream").field("inner", self.deref()).finish()
+        f.debug_struct("TcpStream")
+            .field("inner", self.deref())
+            .finish()
     }
 }
 
@@ -546,6 +548,7 @@ impl From<OpenSslErrorStack> for HandshakeError {
         Self::Failure(error.into())
     }
 }
+
 #[cfg(feature = "rustls-connector")]
 impl From<RustlsHandshakeError> for HandshakeError {
     fn from(error: RustlsHandshakeError) -> Self {
