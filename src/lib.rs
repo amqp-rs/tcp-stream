@@ -130,6 +130,9 @@ pub struct Identity<'a, 'b> {
     pub password: &'b str,
 }
 
+/// Holds either the TLS TcpStream result or the current handshake state
+pub type HandshakeResult = Result<TcpStream, HandshakeError>;
+
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
@@ -209,26 +212,26 @@ fn into_rustls_common(
     c: RustlsConnector,
     domain: &str,
     _: Option<Identity<'_, '_>>,
-) -> Result<TcpStream, HandshakeError> {
+) -> HandshakeResult {
     // FIXME: identity
     s.into_rustls(c, domain)
 }
 
 cfg_if! {
     if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnector::new_with_native_certs()?, domain, identity)
         }
     } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnector::new_with_webpki_roots_certs(), domain, identity)
         }
     } else if #[cfg(feature = "rustls-connector")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnector::default(), domain, identity)
         }
     } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
             let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
             if let Some(identity) = identity {
                 let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
@@ -243,7 +246,7 @@ cfg_if! {
             s.into_openssl(builder.build(), domain)
         }
     } else if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
             let mut builder = NativeTlsConnector::builder();
             if let Some(identity) = identity {
                 builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
@@ -251,7 +254,7 @@ cfg_if! {
             s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> Result<TcpStream, HandshakeError> {
+        fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> HandshakeResult {
             Ok(TcpStream::Plain(s.into_plain()?))
         }
     }
@@ -449,7 +452,7 @@ impl MidHandshakeTlsStream {
     }
 
     /// Retry the handshake
-    pub fn handshake(self) -> Result<TcpStream, HandshakeError> {
+    pub fn handshake(self) -> HandshakeResult {
         Ok(match self {
             MidHandshakeTlsStream::Plain(mid) => TcpStream::Plain(mid),
             #[cfg(feature = "native-tls")]
