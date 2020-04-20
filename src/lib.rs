@@ -436,7 +436,7 @@ impl MidHandshakeTlsStream {
     }
 
     /// Get a mutable reference to the inner stream
-    pub fn get_mut(&mut self) -> &MioTcpStream {
+    pub fn get_mut(&mut self) -> &mut MioTcpStream {
         match self {
             MidHandshakeTlsStream::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
