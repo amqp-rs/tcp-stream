@@ -465,55 +465,6 @@ impl MidHandshakeTlsStream {
     }
 }
 
-/// Extension to the HandshakeResult type alias
-pub trait HandshakeResultExt {
-    /// Get a reference to the inner stream
-    fn get_ref(&self) -> Option<&MioTcpStream>;
-    /// Get a mutable reference to the inner stream
-    fn get_mut(&mut self) -> Option<&mut MioTcpStream>;
-    /// Check whether the stream is still handshaking
-    fn is_handshaking(&self) -> bool;
-    /// Retry the handshake
-    fn handshake(self) -> Self
-    where
-        Self: Sized;
-}
-
-impl HandshakeResultExt for HandshakeResult {
-    fn get_ref(&self) -> Option<&MioTcpStream> {
-        self.as_ref()
-            .map(|stream| Some(stream.deref()))
-            .unwrap_or_else(|err| match err {
-                HandshakeError::WouldBlock(mid) => Some(mid.get_ref()),
-                HandshakeError::Failure(_) => None,
-            })
-    }
-
-    fn get_mut(&mut self) -> Option<&mut MioTcpStream> {
-        self.as_mut()
-            .map(|stream| Some(stream.deref_mut()))
-            .unwrap_or_else(|err| match err {
-                HandshakeError::WouldBlock(mid) => Some(mid.get_mut()),
-                HandshakeError::Failure(_) => None,
-            })
-    }
-
-    fn is_handshaking(&self) -> bool {
-        if let Err(HandshakeError::WouldBlock(_)) = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    fn handshake(self) -> Self {
-        match self {
-            Err(HandshakeError::WouldBlock(mid)) => mid.handshake(),
-            other => other,
-        }
-    }
-}
-
 #[cfg(feature = "native-tls")]
 impl From<NativeTlsMidHandshakeTlsStream> for MidHandshakeTlsStream {
     fn from(mid: NativeTlsMidHandshakeTlsStream) -> Self {
