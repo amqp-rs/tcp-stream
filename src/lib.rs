@@ -59,15 +59,15 @@ pub use native_tls::TlsConnector as NativeTlsConnector;
 
 #[cfg(feature = "native-tls")]
 /// A TcpStream wrapped by native-tls
-pub type NativeTlsStream = native_tls::TlsStream<MioTcpStream>;
+pub type NativeTlsStream = native_tls::TlsStream<TcpStream>;
 
 #[cfg(feature = "native-tls")]
 /// A MidHandshakeTlsStream from native-tls
-pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<MioTcpStream>;
+pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<TcpStream>;
 
 #[cfg(feature = "native-tls")]
 /// A HandshakeError from native-tls
-pub type NativeTlsHandshakeError = native_tls::HandshakeError<MioTcpStream>;
+pub type NativeTlsHandshakeError = native_tls::HandshakeError<TcpStream>;
 
 #[cfg(feature = "openssl")]
 /// Reexport openssl's TlsConnector
@@ -75,15 +75,15 @@ pub use openssl::ssl::{SslConnector as OpenSslConnector, SslMethod as OpenSslMet
 
 #[cfg(feature = "openssl")]
 /// A TcpStream wrapped by openssl
-pub type OpenSslStream = openssl::ssl::SslStream<MioTcpStream>;
+pub type OpenSslStream = openssl::ssl::SslStream<TcpStream>;
 
 #[cfg(feature = "openssl")]
 /// A MidHandshakeTlsStream from openssl
-pub type OpenSslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<MioTcpStream>;
+pub type OpenSslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<TcpStream>;
 
 #[cfg(feature = "openssl")]
 /// A HandshakeError from openssl
-pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<MioTcpStream>;
+pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
 
 #[cfg(feature = "openssl")]
 /// An ErrorStack from openssl
@@ -95,15 +95,15 @@ pub use rustls_connector::RustlsConnector;
 
 #[cfg(feature = "rustls-connector")]
 /// A TcpStream wrapped by rustls
-pub type RustlsStream = rustls_connector::TlsStream<MioTcpStream>;
+pub type RustlsStream = rustls_connector::TlsStream<TcpStream>;
 
 #[cfg(feature = "rustls-connector")]
 /// A MidHandshakeTlsStream from rustls_connector
-pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<MioTcpStream>;
+pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<TcpStream>;
 
 #[cfg(feature = "rustls-connector")]
 /// A HandshakeError from rustls_connector
-pub type RustlsHandshakeError = rustls_connector::HandshakeError<MioTcpStream>;
+pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
 #[allow(clippy::large_enum_variant)]
@@ -194,9 +194,9 @@ impl TcpStream {
     }
 
     #[allow(irrefutable_let_patterns)]
-    fn into_plain(self) -> Result<MioTcpStream, io::Error> {
+    fn into_plain(self) -> Result<TcpStream, io::Error> {
         if let TcpStream::Plain(plain) = self {
-            Ok(plain)
+            Ok(TcpStream::Plain(plain))
         } else {
             Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -412,7 +412,7 @@ impl fmt::Debug for TcpStream {
 #[derive(Debug)]
 pub enum MidHandshakeTlsStream {
     /// Not a TLS stream
-    Plain(MioTcpStream),
+    Plain(TcpStream),
     #[cfg(feature = "native-tls")]
     /// A native-tls MidHandshakeTlsStream
     NativeTls(NativeTlsMidHandshakeTlsStream),
@@ -426,7 +426,7 @@ pub enum MidHandshakeTlsStream {
 
 impl MidHandshakeTlsStream {
     /// Get a reference to the inner stream
-    pub fn get_ref(&self) -> &MioTcpStream {
+    pub fn get_ref(&self) -> &TcpStream {
         match self {
             MidHandshakeTlsStream::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
@@ -439,7 +439,7 @@ impl MidHandshakeTlsStream {
     }
 
     /// Get a mutable reference to the inner stream
-    pub fn get_mut(&mut self) -> &mut MioTcpStream {
+    pub fn get_mut(&mut self) -> &mut TcpStream {
         match self {
             MidHandshakeTlsStream::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
@@ -454,7 +454,7 @@ impl MidHandshakeTlsStream {
     /// Retry the handshake
     pub fn handshake(self) -> HandshakeResult {
         Ok(match self {
-            MidHandshakeTlsStream::Plain(mid) => TcpStream::Plain(mid),
+            MidHandshakeTlsStream::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mid) => mid.handshake()?.into(),
             #[cfg(feature = "openssl")]
