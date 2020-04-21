@@ -106,19 +106,18 @@ pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<T
 pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
-#[allow(clippy::large_enum_variant)]
 pub enum TcpStream {
     /// Wrapper around mio's TcpStream
     Plain(MioTcpStream),
     #[cfg(feature = "native-tls")]
     /// Wrapper around a TLS stream hanled by native-tls
-    NativeTls(NativeTlsStream),
+    NativeTls(Box<NativeTlsStream>),
     #[cfg(feature = "openssl")]
     /// Wrapper around a TLS stream hanled by openssl
-    OpenSsl(OpenSslStream),
+    OpenSsl(Box<OpenSslStream>),
     #[cfg(feature = "rustls-connector")]
     /// Wrapper around a TLS stream hanled by rustls
-    Rustls(RustlsStream),
+    Rustls(Box<RustlsStream>),
 }
 
 /// Holds PKCS#12 DER-encoded identity and decryption password
@@ -269,21 +268,21 @@ impl From<MioTcpStream> for TcpStream {
 #[cfg(feature = "native-tls")]
 impl From<NativeTlsStream> for TcpStream {
     fn from(s: NativeTlsStream) -> Self {
-        TcpStream::NativeTls(s)
+        TcpStream::NativeTls(Box::new(s))
     }
 }
 
 #[cfg(feature = "openssl")]
 impl From<OpenSslStream> for TcpStream {
     fn from(s: OpenSslStream) -> Self {
-        TcpStream::OpenSsl(s)
+        TcpStream::OpenSsl(Box::new(s))
     }
 }
 
 #[cfg(feature = "rustls-connector")]
 impl From<RustlsStream> for TcpStream {
     fn from(s: RustlsStream) -> Self {
-        TcpStream::Rustls(s)
+        TcpStream::Rustls(Box::new(s))
     }
 }
 
