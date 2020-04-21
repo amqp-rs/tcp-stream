@@ -502,6 +502,16 @@ pub enum HandshakeError {
     Failure(io::Error),
 }
 
+impl HandshakeError {
+    /// Try and get the inner mid handshake TLS stream from this error
+    pub fn into_mid_handshake_tls_stream(self) -> io::Result<MidHandshakeTlsStream> {
+        match self {
+            Self::WouldBlock(mid) => Ok(mid),
+            Self::Failure(error) => Err(error),
+        }
+    }
+}
+
 impl fmt::Display for HandshakeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
