@@ -1,10 +1,14 @@
+use crate::{TcpStream, TcpStreamArc};
 use mio::net::TcpStream as MioTcpStream;
-
-use crate::TcpStream;
-
 use std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket};
 
 impl AsRawSocket for TcpStream {
+    fn as_raw_socket(&self) -> RawSocket {
+        <MioTcpStream as AsRawSocket>::as_raw_socket(self)
+    }
+}
+
+impl AsRawSocket for TcpStreamArc {
     fn as_raw_socket(&self) -> RawSocket {
         <MioTcpStream as AsRawSocket>::as_raw_socket(self)
     }
