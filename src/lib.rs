@@ -286,6 +286,18 @@ impl From<RustlsStream> for TcpStream {
     }
 }
 
+impl TcpStream {
+    /// Attempt reading from underlying stream, returning Ok(()) if the stream is readable
+    pub fn is_readable(&self) -> io::Result<()> {
+        self.deref().read(&mut []).map(|_| ())
+    }
+
+    /// Attempt writing to underlying stream, returning Ok(()) if the stream is writable
+    pub fn is_writable(&self) -> io::Result<()> {
+        self.deref().write(&[]).map(|_| ())
+    }
+}
+
 impl Deref for TcpStream {
     type Target = MioTcpStream;
 
