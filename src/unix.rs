@@ -1,14 +1,8 @@
-use crate::{TcpStream, TcpStreamArc};
+use crate::TcpStream;
 use mio::net::TcpStream as MioTcpStream;
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 impl AsRawFd for TcpStream {
-    fn as_raw_fd(&self) -> RawFd {
-        <MioTcpStream as AsRawFd>::as_raw_fd(self)
-    }
-}
-
-impl AsRawFd for TcpStreamArc {
     fn as_raw_fd(&self) -> RawFd {
         <MioTcpStream as AsRawFd>::as_raw_fd(self)
     }

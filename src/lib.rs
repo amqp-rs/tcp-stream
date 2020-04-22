@@ -51,7 +51,6 @@ use std::{
     io::{self, IoSlice, IoSliceMut, Read, Write},
     net::{self, ToSocketAddrs},
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 
 #[cfg(feature = "native-tls")]
@@ -589,18 +588,6 @@ impl From<RustlsHandshakeError> for HandshakeError {
 impl From<io::Error> for HandshakeError {
     fn from(err: io::Error) -> Self {
         HandshakeError::Failure(err)
-    }
-}
-
-/// Arc wrapper for TcpStream
-#[derive(Clone)]
-pub struct TcpStreamArc(Arc<TcpStream>);
-
-impl Deref for TcpStreamArc {
-    type Target = TcpStream;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.deref()
     }
 }
 
