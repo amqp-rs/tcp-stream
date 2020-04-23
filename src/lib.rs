@@ -364,6 +364,28 @@ impl Read for TcpStream {
     }
 }
 
+impl Read for &TcpStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        (*self).deref().read(buf)
+    }
+
+    fn read_vectored(&mut self, bufs: &mut [IoSliceMut<'_>]) -> io::Result<usize> {
+        (*self).deref().read_vectored(bufs)
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+        (*self).deref().read_to_end(buf)
+    }
+
+    fn read_to_string(&mut self, buf: &mut String) -> io::Result<usize> {
+        (*self).deref().read_to_string(buf)
+    }
+
+    fn read_exact(&mut self, buf: &mut [u8]) -> io::Result<()> {
+        (*self).deref().read_exact(buf)
+    }
+}
+
 impl Write for TcpStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         fwd_impl!(self, write, buf)
@@ -383,6 +405,28 @@ impl Write for TcpStream {
 
     fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
         fwd_impl!(self, write_fmt, fmt)
+    }
+}
+
+impl Write for &TcpStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        (*self).deref().write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        (*self).deref().flush()
+    }
+
+    fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> io::Result<usize> {
+        (*self).deref().write_vectored(bufs)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        (*self).deref().write_all(buf)
+    }
+
+    fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
+        (*self).deref().write_fmt(fmt)
     }
 }
 
