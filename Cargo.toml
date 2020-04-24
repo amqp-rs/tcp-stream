@@ -20,13 +20,14 @@ quic                      = ["rustls-connector/quic"]
 rustls                    = ["rustls-native-certs"]
 rustls-webpki-roots-certs = ["rustls-connector", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls-connector", "rustls-connector/native-certs"]
-vendored                  = ["openssl/vendored"]
+vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
 cfg-if = "^0.1.5"
 
 [dependencies.mio]
 version  = "^0.7"
+default-features = false
 features = ["os-poll", "tcp"]
 
 [dependencies.native-tls]
