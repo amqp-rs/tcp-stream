@@ -49,8 +49,9 @@ use std::{
     error::Error,
     fmt,
     io::{self, IoSlice, IoSliceMut, Read, Write},
-    net::{self, ToSocketAddrs},
+    net::{TcpStream as StdTcpStream, ToSocketAddrs},
     ops::{Deref, DerefMut},
+    time::Duration,
 };
 
 #[cfg(feature = "native-tls")]
@@ -135,21 +136,17 @@ pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        let addrs = addr.to_socket_addrs()?;
-        let mut err = None;
-        for addr in addrs {
-            match MioTcpStream::connect(addr) {
-                Ok(stream) => return Ok(stream.into()),
-                Err(error) => err = Some(error),
-            }
-        }
-        Err(err.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
-        }))
+        connect_std(addr, None).map(Self::from_std)
+    }
+
+    /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
+    /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
+    pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
+        connect_std(addr, Some(timeout)).map(Self::from_std)
     }
 
     /// Wrapper around mio's TcpStream::from_std
-    pub fn from_std(stream: net::TcpStream) -> Self {
+    pub fn from_std(stream: StdTcpStream) -> Self {
         MioTcpStream::from_std(stream).into()
     }
 
@@ -203,6 +200,28 @@ impl TcpStream {
             ))
         }
     }
+}
+
+fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
+        let mut addrs = addr.to_socket_addrs()?;
+        let mut err = None;
+        if let Some(timeout) = timeout {
+            if let Some(addr) = addrs.next() {
+                match StdTcpStream::connect_timeout(&addr, timeout) {
+                    Ok(stream) => return Ok(stream),
+                    Err(error) => err = Some(error),
+                }
+            }
+        }
+        for addr in addrs {
+            match StdTcpStream::connect(addr) {
+                Ok(stream) => return Ok(stream),
+                Err(error) => err = Some(error),
+            }
+        }
+        Err(err.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
+        }))
 }
 
 #[cfg(feature = "rustls-connector")]
