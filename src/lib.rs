@@ -1,6 +1,6 @@
 #![deny(missing_docs)]
 #![warn(rust_2018_idioms)]
-#![doc(html_root_url = "https://docs.rs/tcp-stream/0.15.3/")]
+#![doc(html_root_url = "https://docs.rs/tcp-stream/0.15.4/")]
 
 //! # mio's TCP stream on steroids
 //!
@@ -139,13 +139,11 @@ impl TcpStream {
         connect_mio(addr, None).map(Self::from)
     }
 
-    /*
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
         connect_mio(addr, Some(timeout)).map(Self::from)
     }
-    */
 
     /// Wrapper around mio's TcpStream::from_std
     pub fn from_std(stream: StdTcpStream) -> Self {
@@ -205,18 +203,18 @@ impl TcpStream {
 }
 
 fn connect_mio<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<MioTcpStream> {
-    let /*mut*/ addrs = addr.to_socket_addrs()?;
+    let mut addrs = addr.to_socket_addrs()?;
     let mut err = None;
-    /*
     if let Some(timeout) = timeout {
         if let Some(addr) = addrs.next() {
-            match StdTcpStream::connect_timeout(&addr, timeout) {
-                Ok(stream) => return Ok(stream),
+            match StdTcpStream::connect_timeout(&addr, timeout)
+                .and_then(|stream| stream.set_nonblocking(true).map(|()| stream))
+            {
+                Ok(stream) => return Ok(MioTcpStream::from_std(stream)),
                 Err(error) => err = Some(error),
             }
         }
     }
-    */
     for addr in addrs {
         match MioTcpStream::connect(addr) {
             Ok(stream) => return Ok(stream),
