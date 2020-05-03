@@ -139,11 +139,13 @@ impl TcpStream {
         connect_std(addr, None).map(Self::from_std)
     }
 
+    /*
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
         connect_std(addr, Some(timeout)).map(Self::from_std)
     }
+    */
 
     /// Wrapper around mio's TcpStream::from_std
     pub fn from_std(stream: StdTcpStream) -> Self {
@@ -203,8 +205,9 @@ impl TcpStream {
 }
 
 fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
-    let mut addrs = addr.to_socket_addrs()?;
+    let /*mut*/ addrs = addr.to_socket_addrs()?;
     let mut err = None;
+    /*
     if let Some(timeout) = timeout {
         if let Some(addr) = addrs.next() {
             match StdTcpStream::connect_timeout(&addr, timeout) {
@@ -213,6 +216,7 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
             }
         }
     }
+    */
     for addr in addrs {
         match StdTcpStream::connect(addr) {
             Ok(stream) => return Ok(stream),
