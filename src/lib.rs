@@ -136,14 +136,14 @@ pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        connect_std(addr, None).map(Self::from_std)
+        connect_mio(addr, None).map(Self::from)
     }
 
     /*
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
-        connect_std(addr, Some(timeout)).map(Self::from_std)
+        connect_mio(addr, Some(timeout)).map(Self::from)
     }
     */
 
@@ -204,7 +204,7 @@ impl TcpStream {
     }
 }
 
-fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
+fn connect_mio<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<MioTcpStream> {
     let /*mut*/ addrs = addr.to_socket_addrs()?;
     let mut err = None;
     /*
@@ -218,7 +218,7 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
     }
     */
     for addr in addrs {
-        match StdTcpStream::connect(addr) {
+        match MioTcpStream::connect(addr) {
             Ok(stream) => return Ok(stream),
             Err(error) => err = Some(error),
         }
