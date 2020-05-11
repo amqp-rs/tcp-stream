@@ -92,7 +92,7 @@ pub type OpenSslErrorStack = openssl::error::ErrorStack;
 
 #[cfg(feature = "rustls-connector")]
 /// Reexport rustls-connector's TlsConnector
-pub use rustls_connector::RustlsConnector;
+pub use rustls_connector::{RustlsConnector, RustlsConnectorConfig};
 
 #[cfg(feature = "rustls-connector")]
 /// A TcpStream wrapped by rustls
@@ -226,29 +226,53 @@ fn connect_mio<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
     }))
 }
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 fn into_rustls_common(
     s: TcpStream,
-    c: RustlsConnector,
+    mut c: RustlsConnectorConfig,
     domain: &str,
-    _: Option<Identity<'_, '_>>,
+    identity: Option<Identity<'_, '_>>,
 ) -> HandshakeResult {
-    // FIXME: identity
-    s.into_rustls(c, domain)
+    if let Some(identity) = identity {
+        use rustls_connector::rustls::{Certificate, PrivateKey};
+        let pfx = p12::PFX::parse(identity.der)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let key = if let Some(key) = pfx
+            .key_bags(identity.password)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+            .iter()
+            .next()
+        {
+            PrivateKey(key.clone())
+        } else {
+            return Err(
+                io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
+            );
+        };
+        let certs = pfx
+            .cert_bags(identity.password)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+            .iter()
+            .map(|cert| Certificate(cert.clone()))
+            .collect();
+        c.set_single_client_cert(certs, key)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+    }
+    s.into_rustls(c.into(), domain)
 }
 
 cfg_if! {
     if #[cfg(feature = "rustls-native-certs")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnector::new_with_native_certs()?, domain, identity)
+            into_rustls_common(s, RustlsConnectorConfig::new_with_native_certs()?, domain, identity)
         }
     } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnector::new_with_webpki_roots_certs(), domain, identity)
+            into_rustls_common(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, identity)
         }
-    } else if #[cfg(feature = "rustls-connector")] {
+    } else if #[cfg(feature = "rustls-common")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnector::default(), domain, identity)
+            into_rustls_common(s, RustlsConnectorConfig::default(), domain, identity)
         }
     } else if #[cfg(feature = "openssl")] {
         fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {

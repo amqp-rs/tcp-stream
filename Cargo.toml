@@ -18,8 +18,9 @@ default                   = ["native-tls"]
 dangerous-configuration   = ["rustls-connector/dangerous-configuration"]
 quic                      = ["rustls-connector/quic"]
 rustls                    = ["rustls-native-certs"]
-rustls-webpki-roots-certs = ["rustls-connector", "rustls-connector/webpki-roots-certs"]
-rustls-native-certs       = ["rustls-connector", "rustls-connector/native-certs"]
+rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
+rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
+rustls-common             = ["rustls-connector", "p12"]
 vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
@@ -38,8 +39,12 @@ optional = true
 version  = "^0.10"
 optional = true
 
+[dependencies.p12]
+version = "^0.1"
+optional = true
+
 [dependencies.rustls-connector]
-version          = "^0.10.2"
+version          = "^0.11"
 optional         = true
 default-features = false
 
