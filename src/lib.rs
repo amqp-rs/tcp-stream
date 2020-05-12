@@ -126,11 +126,11 @@ pub enum TcpStream {
 
 /// Holds extra TLS configuration
 #[derive(Default, Debug, PartialEq)]
-pub struct TLSConfig<'a, 'b> {
+pub struct TLSConfig<'der, 'pass, 'chain> {
     /// Use for client certificate authentication
-    pub identity: Option<Identity<'a, 'b>>,
+    pub identity: Option<Identity<'der, 'pass>>,
     /// The custom certificates chain in PEM format
-    pub cert_chain: String,
+    pub cert_chain: &'chain str,
 }
 
 /// Holds PKCS#12 DER-encoded identity and decryption password
@@ -163,7 +163,11 @@ impl TcpStream {
     }
 
     /// Enable TLS
-    pub fn into_tls(self, domain: &str, config: TLSConfig<'_, '_>) -> Result<Self, HandshakeError> {
+    pub fn into_tls(
+        self,
+        domain: &str,
+        config: TLSConfig<'_, '_, '_>,
+    ) -> Result<Self, HandshakeError> {
         into_tls_impl(self, domain, config)
     }
 
@@ -239,7 +243,7 @@ fn into_rustls_common(
     s: TcpStream,
     mut c: RustlsConnectorConfig,
     domain: &str,
-    config: TLSConfig<'_, '_>,
+    config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
     use rustls_connector::rustls::{Certificate, PrivateKey};
 
@@ -279,19 +283,19 @@ fn into_rustls_common(
 
 cfg_if! {
     if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
         }
     } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)
         }
     } else if #[cfg(feature = "rustls-common")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::default(), domain, config)
         }
     } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             use openssl::x509::X509;
 
             let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
@@ -313,7 +317,7 @@ cfg_if! {
             s.into_openssl(builder.build(), domain)
         }
     } else if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             use native_tls::Certificate;
 
             let mut builder = NativeTlsConnector::builder();
@@ -328,7 +332,7 @@ cfg_if! {
             s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_, '_>) -> HandshakeResult {
             Ok(s.into_plain()?)
         }
     }
