@@ -12,13 +12,13 @@
 //! To connect to a remote server:
 //!
 //! ```rust
-//! use tcp_stream::{HandshakeError, TcpStream};
+//! use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
 //!
 //! use std::io::{self, Read, Write};
 //!
 //! fn main() {
 //!     let stream = TcpStream::connect("google.com:443").unwrap();
-//!     let mut stream = stream.into_tls("google.com", None);
+//!     let mut stream = stream.into_tls("google.com", TLSConfig::default());
 //!
 //!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
 //!         stream = mid_handshake.handshake();
@@ -53,6 +53,9 @@ use std::{
     ops::{Deref, DerefMut},
     time::Duration,
 };
+
+#[cfg(feature = "native-tls")]
+use native_tls_crate as native_tls;
 
 #[cfg(feature = "native-tls")]
 /// Reexport native-tls's TlsConnector
@@ -121,6 +124,15 @@ pub enum TcpStream {
     Rustls(Box<RustlsStream>),
 }
 
+/// Holds extra TLS configuration
+#[derive(Default, Debug, PartialEq)]
+pub struct TLSConfig<'a, 'b> {
+    /// Use for client certificate authentication
+    pub identity: Option<Identity<'a, 'b>>,
+    /// The custom certificates chain in PEM format
+    pub cert_chain: String,
+}
+
 /// Holds PKCS#12 DER-encoded identity and decryption password
 #[derive(Debug, PartialEq)]
 pub struct Identity<'a, 'b> {
@@ -151,12 +163,8 @@ impl TcpStream {
     }
 
     /// Enable TLS
-    pub fn into_tls(
-        self,
-        domain: &str,
-        identity: Option<Identity<'_, '_>>,
-    ) -> Result<Self, HandshakeError> {
-        into_tls_impl(self, domain, identity)
+    pub fn into_tls(self, domain: &str, config: TLSConfig<'_, '_>) -> Result<Self, HandshakeError> {
+        into_tls_impl(self, domain, config)
     }
 
     #[cfg(feature = "native-tls")]
@@ -231,10 +239,11 @@ fn into_rustls_common(
     s: TcpStream,
     mut c: RustlsConnectorConfig,
     domain: &str,
-    identity: Option<Identity<'_, '_>>,
+    config: TLSConfig<'_, '_>,
 ) -> HandshakeResult {
-    if let Some(identity) = identity {
-        use rustls_connector::rustls::{Certificate, PrivateKey};
+    use rustls_connector::rustls::{Certificate, PrivateKey};
+
+    if let Some(identity) = config.identity {
         let pfx = p12::PFX::parse(identity.der)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
         let key = if let Some(key) = pfx
@@ -258,26 +267,35 @@ fn into_rustls_common(
         c.set_single_client_cert(certs, key)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
     }
+    if !config.cert_chain.is_empty() {
+        c.root_store
+            .add_pem_file(&mut config.cert_chain.as_bytes())
+            .map_err(|()| {
+                io::Error::new(io::ErrorKind::Other, "Failed to import certificates chain")
+            })?;
+    }
     s.into_rustls(c.into(), domain)
 }
 
 cfg_if! {
     if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnectorConfig::new_with_native_certs()?, domain, identity)
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+            into_rustls_common(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
         }
     } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, identity)
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+            into_rustls_common(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)
         }
     } else if #[cfg(feature = "rustls-common")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
-            into_rustls_common(s, RustlsConnectorConfig::default(), domain, identity)
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+            into_rustls_common(s, RustlsConnectorConfig::default(), domain, config)
         }
     } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+            use openssl::x509::X509;
+
             let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
-            if let Some(identity) = identity {
+            if let Some(identity) = config.identity {
                 let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
                 builder.set_certificate(&identity.cert)?;
                 builder.set_private_key(&identity.pkey)?;
@@ -287,18 +305,30 @@ cfg_if! {
                     }
                 }
             }
+            if !config.cert_chain.is_empty() {
+                for cert in X509::stack_from_pem(config.cert_chain.as_bytes())?.drain(..).rev() {
+                    builder.cert_store_mut().add_cert(cert)?;
+                }
+            }
             s.into_openssl(builder.build(), domain)
         }
     } else if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, identity: Option<Identity<'_, '_>>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_>) -> HandshakeResult {
+            use native_tls::Certificate;
+
             let mut builder = NativeTlsConnector::builder();
-            if let Some(identity) = identity {
+            if let Some(identity) = config.identity {
                 builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+            }
+            if !config.cert_chain.is_empty() {
+                for cert in pem::parse_many(config.cert_chain).iter().rev() {
+                    builder.add_root_certificate(Certificate::from_der(&cert.contents[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+                }
             }
             s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_>) -> HandshakeResult {
             Ok(s.into_plain()?)
         }
     }
