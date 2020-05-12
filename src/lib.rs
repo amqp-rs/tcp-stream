@@ -299,7 +299,7 @@ cfg_if! {
         }
     } else {
         fn into_tls_impl(s: TcpStream, _domain: &str, _: Option<Identity<'_, '_>>) -> HandshakeResult {
-            Ok(TcpStream::Plain(s.into_plain()?))
+            Ok(s.into_plain()?)
         }
     }
 }
