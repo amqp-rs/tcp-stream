@@ -130,7 +130,7 @@ pub struct TLSConfig<'der, 'pass, 'chain> {
     /// Use for client certificate authentication
     pub identity: Option<Identity<'der, 'pass>>,
     /// The custom certificates chain in PEM format
-    pub cert_chain: &'chain str,
+    pub cert_chain: Option<&'chain str>,
 }
 
 /// Holds PKCS#12 DER-encoded identity and decryption password
@@ -271,9 +271,9 @@ fn into_rustls_common(
         c.set_single_client_cert(certs, key)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
     }
-    if !config.cert_chain.is_empty() {
+    if let Some(cert_chain) = config.cert_chain.as_mut() {
         c.root_store
-            .add_pem_file(&mut config.cert_chain.as_bytes())
+            .add_pem_file(&mut cert_chain.as_bytes())
             .map_err(|()| {
                 io::Error::new(io::ErrorKind::Other, "Failed to import certificates chain")
             })?;
@@ -309,8 +309,8 @@ cfg_if! {
                     }
                 }
             }
-            if !config.cert_chain.is_empty() {
-                for cert in X509::stack_from_pem(config.cert_chain.as_bytes())?.drain(..).rev() {
+            if let Some(cert_chain) = config.cert_chain.as_ref() {
+                for cert in X509::stack_from_pem(cert_chain.as_bytes())?.drain(..).rev() {
                     builder.cert_store_mut().add_cert(cert)?;
                 }
             }
@@ -324,8 +324,8 @@ cfg_if! {
             if let Some(identity) = config.identity {
                 builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
             }
-            if !config.cert_chain.is_empty() {
-                for cert in pem::parse_many(config.cert_chain).iter().rev() {
+            if let Some(cert_chain) = config.cert_chain.as_ref() {
+                for cert in pem::parse_many(cert_chain).iter().rev() {
                     builder.add_root_certificate(Certificate::from_der(&cert.contents[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
                 }
             }
