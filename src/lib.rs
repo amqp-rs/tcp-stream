@@ -243,7 +243,7 @@ fn into_rustls_common(
     s: TcpStream,
     mut c: RustlsConnectorConfig,
     domain: &str,
-    config: TLSConfig<'_, '_, '_>,
+    mut config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
     use rustls_connector::rustls::{Certificate, PrivateKey};
 
