@@ -133,13 +133,51 @@ pub struct TLSConfig<'der, 'pass, 'chain> {
     pub cert_chain: Option<&'chain str>,
 }
 
+/// Holds extra TLS configuration
+#[derive(Default, Debug, PartialEq)]
+pub struct OwnedTLSConfig {
+    /// Use for client certificate authentication
+    pub identity: Option<OwnedIdentity>,
+    /// The custom certificates chain in PEM format
+    pub cert_chain: Option<String>,
+}
+
+impl OwnedTLSConfig {
+    /// Get the ephemeral TLSConfig corresponding to the OwnedTLSConfig
+    pub fn as_ref(&self) -> TLSConfig<'_, '_, '_> {
+        TLSConfig {
+            identity: self.identity.as_ref().map(OwnedIdentity::as_ref),
+            cert_chain: self.cert_chain.as_deref(),
+        }
+    }
+}
+
 /// Holds PKCS#12 DER-encoded identity and decryption password
 #[derive(Debug, PartialEq)]
-pub struct Identity<'a, 'b> {
+pub struct Identity<'der, 'pass> {
     /// PKCS#12 DER-encoded identity
-    pub der: &'a [u8],
+    pub der: &'der [u8],
     /// Decryption password
-    pub password: &'b str,
+    pub password: &'pass str,
+}
+
+/// Holds PKCS#12 DER-encoded identity and decryption password
+#[derive(Debug, PartialEq)]
+pub struct OwnedIdentity {
+    /// PKCS#12 DER-encoded identity
+    pub der: Vec<u8>,
+    /// Decryption password
+    pub password: String,
+}
+
+impl OwnedIdentity {
+    /// Get the ephemeral Identity corresponding to the OwnedIdentity
+    pub fn as_ref(&self) -> Identity<'_, '_> {
+        Identity {
+            der: &self.der,
+            password: &self.password,
+        }
+    }
 }
 
 /// Holds either the TLS TcpStream result or the current handshake state
