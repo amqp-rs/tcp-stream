@@ -17,10 +17,9 @@ matrix:
         - rust: nightly
         - rust: nightly
           os: osx
-# Fails because of rustls
-#        - rust: nightly
-#          script:
-#                - cargo -Z minimal-versions test --verbose --all --all-features
+        - rust: nightly
+          script:
+                - cargo -Z minimal-versions test --verbose --all --all-features
 
 script:
     - cargo build --verbose --all
