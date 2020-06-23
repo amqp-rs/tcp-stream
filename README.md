@@ -1,4 +1,43 @@
-# tcp-stream
+# mio's TCP stream on steroids
 
-[![Build Status](https://travis-ci.org/Keruspe/tcp-stream.svg?branch=master)](https://travis-ci.org/Keruspe/tcp-stream)
-[![Build status](https://ci.appveyor.com/api/projects/status/hsatxi8pkb3w6y42/branch/master?svg=true)](https://ci.appveyor.com/project/Keruspe/tcp-stream/branch/master)
+[![API Docs](https://docs.rs/tcp-stream/badge.svg)](https://docs.rs/tcp-stream)
+[![Build status](https://github.com/Keruspe/tcp-stream/workflows/Build%20and%20test/badge.svg)](https://github.com/Keruspe/tcp-stream/actions)
+[![Downloads](https://img.shields.io/crates/d/tcp-stream.svg)](https://crates.io/crates/tcp-stream)
+
+tcp-stream is a library aiming at providing TLS and futures/tokio
+support to mio's TcpStream without forcibly using tokio-reactor
+
+# Examples
+
+To connect to a remote server:
+
+```rust
+use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
+
+use std::io::{self, Read, Write};
+
+fn main() {
+    let stream = TcpStream::connect("google.com:443").unwrap();
+    let mut stream = stream.into_tls("google.com", TLSConfig::default());
+
+    while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
+        stream = mid_handshake.handshake();
+    }
+
+    let mut stream = stream.unwrap();
+
+    while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
+        if err.kind() != io::ErrorKind::WouldBlock {
+            panic!("error: {:?}", err);
+        }
+    }
+    stream.flush().unwrap();
+    let mut res = vec![];
+    while let Err(err) = stream.read_to_end(&mut res) {
+        if err.kind() != io::ErrorKind::WouldBlock {
+            panic!("stream error: {:?}", err);
+        }
+    }
+    println!("{}", String::from_utf8_lossy(&res));
+}
+```
