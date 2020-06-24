@@ -12,13 +12,18 @@
 //! To connect to a remote server:
 //!
 //! ```rust
-//! use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
+//! use tcp_stream::{ConnectionError, HandshakeError, TcpStream, TLSConfig};
 //!
 //! use std::io::{self, Read, Write};
 //!
 //! fn main() {
-//!     let stream = TcpStream::connect("google.com:443").unwrap();
-//!     let mut stream = stream.into_tls("google.com", TLSConfig::default());
+//!     let mut stream = TcpStream::connect("google.com:443");
+//!
+//!     while let Err(ConnectionError::WouldBlock(mid_connection)) = stream {
+//!         stream = mid_connection.connect();
+//!     }
+//!
+//!     let mut stream = stream.unwrap().into_tls("google.com", TLSConfig::default());
 //!
 //!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
 //!         stream = mid_handshake.handshake();
@@ -180,39 +185,81 @@ impl OwnedIdentity {
     }
 }
 
+/// Holds either the TcpStream or the current connection state
+pub type ConnectionResult = Result<TcpStream, ConnectionError>;
+
+/// An error returned while connecting
+#[derive(Debug)]
+pub enum ConnectionError {
+    /// We hit WouldBlock during connection
+    WouldBlock(MidConnectionTcpStream),
+    /// We hit a critical failure
+    Failure(io::Error),
+}
+
+impl fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConnectionError::WouldBlock(_) => f.write_str("WouldBlock hit during connection"),
+            ConnectionError::Failure(err) => f.write_fmt(format_args!("IO error: {}", err)),
+        }
+    }
+}
+
+impl Error for ConnectionError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            ConnectionError::Failure(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<io::Error> for ConnectionError {
+    fn from(err: io::Error) -> Self {
+        ConnectionError::Failure(err)
+    }
+}
+
+/// A TCP stream which has been interrupted during the connection
+#[derive(Debug)]
+pub struct MidConnectionTcpStream(TcpStream);
+
+impl MidConnectionTcpStream {
+    /// Retry the connection
+    pub fn connect(self) -> ConnectionResult {
+        match self.0.is_writable() {
+            Ok(()) => Ok(self.0),
+            Err(err)
+                if [io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected]
+                    .contains(&err.kind()) =>
+            {
+                Err(ConnectionError::WouldBlock(self))
+            }
+            Err(err) => Err(ConnectionError::Failure(err)),
+        }
+    }
+}
+
 /// Holds either the TLS TcpStream result or the current handshake state
 pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
-    pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> ConnectionResult {
         connect_mio(addr, None)
             .map(Self::from)
-            .and_then(Self::wait_for_connection)
+            .map(MidConnectionTcpStream)?
+            .connect()
     }
 
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
-    pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
+    pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> ConnectionResult {
         connect_mio(addr, Some(timeout))
             .map(Self::from)
-            .and_then(Self::wait_for_connection)
-    }
-
-    fn wait_for_connection(self) -> io::Result<Self> {
-        // FIXME: avoid busyloop here
-        loop {
-            match self.is_writable() {
-                Ok(()) => return Ok(self),
-                Err(err)
-                    if ![io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected]
-                        .contains(&err.kind()) =>
-                {
-                    return Err(err)
-                }
-                _ => {}
-            }
-        }
+            .map(MidConnectionTcpStream)?
+            .connect()
     }
 
     /// Wrapper around mio's TcpStream::from_std
