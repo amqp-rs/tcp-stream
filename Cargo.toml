@@ -50,7 +50,7 @@ version = "^0.8"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.11.4"
+version          = "^0.11.5"
 optional         = true
 default-features = false
 
