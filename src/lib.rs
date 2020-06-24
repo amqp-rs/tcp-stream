@@ -186,13 +186,17 @@ pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        connect_mio(addr, None).map(Self::from).and_then(Self::wait_for_connection)
+        connect_mio(addr, None)
+            .map(Self::from)
+            .and_then(Self::wait_for_connection)
     }
 
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
-        connect_mio(addr, Some(timeout)).map(Self::from).and_then(Self::wait_for_connection)
+        connect_mio(addr, Some(timeout))
+            .map(Self::from)
+            .and_then(Self::wait_for_connection)
     }
 
     fn wait_for_connection(self) -> io::Result<Self> {
@@ -200,7 +204,12 @@ impl TcpStream {
         loop {
             match self.is_writable() {
                 Ok(()) => return Ok(self),
-                Err(err) if ![io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected].contains(&err.kind()) => return Err(err),
+                Err(err)
+                    if ![io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected]
+                        .contains(&err.kind()) =>
+                {
+                    return Err(err)
+                }
                 _ => {}
             }
         }
