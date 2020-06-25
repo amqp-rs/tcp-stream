@@ -1,6 +1,6 @@
 #![deny(missing_docs)]
 #![warn(rust_2018_idioms)]
-#![doc(html_root_url = "https://docs.rs/tcp-stream/0.20.0/")]
+#![doc(html_root_url = "https://docs.rs/tcp-stream/0.20.1/")]
 
 //! # mio's TCP stream on steroids
 //!
@@ -814,7 +814,7 @@ mod sys {
 
     impl FromRawSocket for TcpStream {
         unsafe fn from_raw_socket(socket: RawSocket) -> Self {
-            Self::Plain(MioTcpStream::from_raw_socket(socket))
+            Self::Plain(MioTcpStream::from_raw_socket(socket), false)
         }
     }
 }
