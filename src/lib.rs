@@ -628,7 +628,12 @@ impl MidHandshakeTlsStream {
     /// Retry the handshake
     pub fn handshake(self) -> HandshakeResult {
         Ok(match self {
-            MidHandshakeTlsStream::Plain(mid) => mid,
+            MidHandshakeTlsStream::Plain(mut mid) => {
+                if !mid.try_connect()? {
+                    return Err(HandshakeError::WouldBlock(mid.into()));
+                }
+                mid
+            },
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mut mid) => {
                 if !mid.get_mut().try_connect()? {
@@ -651,6 +656,12 @@ impl MidHandshakeTlsStream {
                 mid.handshake()?.into()
             }
         })
+    }
+}
+
+impl From<TcpStream> for MidHandshakeTlsStream {
+    fn from(mid: TcpStream) -> Self {
+        MidHandshakeTlsStream::Plain(mid)
     }
 }
 
