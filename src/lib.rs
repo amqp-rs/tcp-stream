@@ -633,7 +633,7 @@ impl MidHandshakeTlsStream {
                     return Err(HandshakeError::WouldBlock(mid.into()));
                 }
                 mid
-            },
+            }
             #[cfg(feature = "native-tls")]
             MidHandshakeTlsStream::NativeTls(mut mid) => {
                 if !mid.get_mut().try_connect()? {
