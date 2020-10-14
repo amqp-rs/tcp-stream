@@ -25,7 +25,7 @@ rustls-common             = ["rustls-connector", "p12"]
 vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
-cfg-if = "^0.1.5"
+cfg-if = "^1.0"
 
 [dependencies.mio]
 version  = "^0.7"
@@ -42,7 +42,7 @@ version  = "^0.10"
 optional = true
 
 [dependencies.p12]
-version = "^0.1"
+version = "^0.2"
 optional = true
 
 [dependencies.pem]
