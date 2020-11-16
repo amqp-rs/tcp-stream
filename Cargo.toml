@@ -28,9 +28,9 @@ vendored-openssl          = ["openssl/vendored"]
 cfg-if = "^1.0"
 
 [dependencies.mio]
-version  = "^0.7"
+version  = "^0.7.6"
 default-features = false
-features = ["os-poll", "tcp"]
+features = ["net", "os-poll"]
 
 [dependencies.native-tls-crate]
 package  = "native-tls"
