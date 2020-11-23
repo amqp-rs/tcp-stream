@@ -297,8 +297,7 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
     let mut err = None;
     if let Some(timeout) = timeout {
         if let Some(addr) = addrs.next() {
-            match StdTcpStream::connect_timeout(&addr, timeout)
-            {
+            match StdTcpStream::connect_timeout(&addr, timeout) {
                 Ok(stream) => return Ok(stream),
                 Err(error) => err = Some(error),
             }
