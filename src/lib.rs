@@ -2,10 +2,9 @@
 #![warn(rust_2018_idioms)]
 #![doc(html_root_url = "https://docs.rs/tcp-stream/0.20.6/")]
 
-//! # mio's TCP stream on steroids
+//! # std::net::TCP stream on steroids
 //!
-//! tcp-stream is a library aiming at providing TLS and futures/tokio
-//! support to mio's TcpStream without forcibly using tokio-reactor
+//! tcp-stream is a library aiming at providing TLS support to std::net::TcpStream
 //!
 //! # Examples
 //!
@@ -18,6 +17,7 @@
 //!
 //! fn main() {
 //!     let mut stream = TcpStream::connect("google.com:443").unwrap();
+//!     stream.set_nonblocking(true).unwrap();
 //!
 //!     while !stream.is_connected() {
 //!         if stream.try_connect().unwrap() {
@@ -50,8 +50,6 @@
 //! ```
 
 use cfg_if::cfg_if;
-use mio::{event::Source, net::TcpStream as MioTcpStream, Interest, Registry, Token};
-
 use std::{
     convert::TryFrom,
     error::Error,
@@ -119,8 +117,8 @@ pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
 pub enum TcpStream {
-    /// Wrapper around mio's TcpStream
-    Plain(MioTcpStream, bool),
+    /// Wrapper around std::net::TcpStream
+    Plain(StdTcpStream, bool),
     #[cfg(feature = "native-tls")]
     /// Wrapper around a TLS stream hanled by native-tls
     NativeTls(Box<NativeTlsStream>),
@@ -194,18 +192,18 @@ pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 impl TcpStream {
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        connect_mio(addr, None).and_then(Self::try_from)
+        connect_std(addr, None).and_then(Self::try_from)
     }
 
     /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
     /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
-        connect_mio(addr, Some(timeout)).and_then(Self::try_from)
+        connect_std(addr, Some(timeout)).and_then(Self::try_from)
     }
 
     /// Wrapper around mio's TcpStream::from_std
     pub fn from_std(stream: StdTcpStream) -> io::Result<Self> {
-        Self::try_from(MioTcpStream::from_std(stream))
+        Self::try_from(stream)
     }
 
     /// Check whether the stream is connected or not
@@ -294,21 +292,20 @@ impl TcpStream {
     }
 }
 
-fn connect_mio<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<MioTcpStream> {
+fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
     let mut addrs = addr.to_socket_addrs()?;
     let mut err = None;
     if let Some(timeout) = timeout {
         if let Some(addr) = addrs.next() {
             match StdTcpStream::connect_timeout(&addr, timeout)
-                .and_then(|stream| stream.set_nonblocking(true).map(|()| stream))
             {
-                Ok(stream) => return Ok(MioTcpStream::from_std(stream)),
+                Ok(stream) => return Ok(stream),
                 Err(error) => err = Some(error),
             }
         }
     }
     for addr in addrs {
-        match MioTcpStream::connect(addr) {
+        match StdTcpStream::connect(addr) {
             Ok(stream) => return Ok(stream),
             Err(error) => err = Some(error),
         }
@@ -418,10 +415,10 @@ cfg_if! {
     }
 }
 
-impl TryFrom<MioTcpStream> for TcpStream {
+impl TryFrom<StdTcpStream> for TcpStream {
     type Error = io::Error;
 
-    fn try_from(s: MioTcpStream) -> io::Result<Self> {
+    fn try_from(s: StdTcpStream) -> io::Result<Self> {
         let mut this = TcpStream::Plain(s, false);
         this.try_connect()?;
         Ok(this)
@@ -462,7 +459,7 @@ impl TcpStream {
 }
 
 impl Deref for TcpStream {
-    type Target = MioTcpStream;
+    type Target = StdTcpStream;
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -546,30 +543,6 @@ impl Write for TcpStream {
 
     fn write_fmt(&mut self, fmt: fmt::Arguments<'_>) -> io::Result<()> {
         fwd_impl!(self, write_fmt, fmt)
-    }
-}
-
-impl Source for TcpStream {
-    fn register(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interests: Interest,
-    ) -> io::Result<()> {
-        <MioTcpStream as Source>::register(self, registry, token, interests)
-    }
-
-    fn reregister(
-        &mut self,
-        registry: &Registry,
-        token: Token,
-        interests: Interest,
-    ) -> io::Result<()> {
-        <MioTcpStream as Source>::reregister(self, registry, token, interests)
-    }
-
-    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
-        <MioTcpStream as Source>::deregister(self, registry)
     }
 }
 
@@ -783,24 +756,26 @@ impl From<io::Error> for HandshakeError {
 #[cfg(unix)]
 mod sys {
     use crate::TcpStream;
-    use mio::net::TcpStream as MioTcpStream;
-    use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+    use std::{
+        net::TcpStream as StdTcpStream,
+        os::unix::io::{AsRawFd, FromRawFd, RawFd},
+    };
 
     impl AsRawFd for TcpStream {
         fn as_raw_fd(&self) -> RawFd {
-            <MioTcpStream as AsRawFd>::as_raw_fd(self)
+            <StdTcpStream as AsRawFd>::as_raw_fd(self)
         }
     }
 
     impl AsRawFd for &TcpStream {
         fn as_raw_fd(&self) -> RawFd {
-            <MioTcpStream as AsRawFd>::as_raw_fd(self)
+            <StdTcpStream as AsRawFd>::as_raw_fd(self)
         }
     }
 
     impl FromRawFd for TcpStream {
         unsafe fn from_raw_fd(fd: RawFd) -> Self {
-            Self::Plain(MioTcpStream::from_raw_fd(fd), false)
+            Self::Plain(StdTcpStream::from_raw_fd(fd), false)
         }
     }
 }
@@ -808,24 +783,26 @@ mod sys {
 #[cfg(windows)]
 mod sys {
     use crate::TcpStream;
-    use mio::net::TcpStream as MioTcpStream;
-    use std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket};
+    use std::{
+        net::TcpStream as StdTcpStream,
+        os::windows::io::{AsRawSocket, FromRawSocket, RawSocket},
+    };
 
     impl AsRawSocket for TcpStream {
         fn as_raw_socket(&self) -> RawSocket {
-            <MioTcpStream as AsRawSocket>::as_raw_socket(self)
+            <StdTcpStream as AsRawSocket>::as_raw_socket(self)
         }
     }
 
     impl AsRawSocket for &TcpStream {
         fn as_raw_socket(&self) -> RawSocket {
-            <MioTcpStream as AsRawSocket>::as_raw_socket(self)
+            <StdTcpStream as AsRawSocket>::as_raw_socket(self)
         }
     }
 
     impl FromRawSocket for TcpStream {
         unsafe fn from_raw_socket(socket: RawSocket) -> Self {
-            Self::Plain(MioTcpStream::from_raw_socket(socket), false)
+            Self::Plain(StdTcpStream::from_raw_socket(socket), false)
         }
     }
 }

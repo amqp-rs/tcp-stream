@@ -3,10 +3,10 @@ name          = "tcp-stream"
 version       = "0.20.6" # remember to update html_root_url
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2018"
-description   = "mio's TcpStream on steroids"
+description   = "std::net::TcpStream on steroids"
 repository    = "https://github.com/Keruspe/tcp-stream"
 documentation = "https://docs.rs/tcp-stream"
-keywords      = ["tcp", "mio", "io", "async", "non-blocking"]
+keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
 license       = "BSD-2-Clause"
 
@@ -26,11 +26,6 @@ vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
 cfg-if = "^1.0"
-
-[dependencies.mio]
-version  = "^0.7.6"
-default-features = false
-features = ["net", "os-poll"]
 
 [dependencies.native-tls-crate]
 package  = "native-tls"
