@@ -1,11 +1,10 @@
-# mio's TCP stream on steroids
+# std::net::TcpStream on steroids
 
 [![API Docs](https://docs.rs/tcp-stream/badge.svg)](https://docs.rs/tcp-stream)
 [![Build status](https://github.com/Keruspe/tcp-stream/workflows/Build%20and%20test/badge.svg)](https://github.com/Keruspe/tcp-stream/actions)
 [![Downloads](https://img.shields.io/crates/d/tcp-stream.svg)](https://crates.io/crates/tcp-stream)
 
-tcp-stream is a library aiming at providing TLS and futures/tokio
-support to mio's TcpStream without forcibly using tokio-reactor
+tcp-stream is a library aiming at providing TLS support to std::net::TcpStream
 
 # Examples
 
