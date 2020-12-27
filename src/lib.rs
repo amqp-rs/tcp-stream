@@ -64,55 +64,55 @@ use std::{
 use native_tls_crate as native_tls;
 
 #[cfg(feature = "native-tls")]
-/// Reexport native-tls's TlsConnector
+/// Reexport native-tls's `TlsConnector`
 pub use native_tls::TlsConnector as NativeTlsConnector;
 
 #[cfg(feature = "native-tls")]
-/// A TcpStream wrapped by native-tls
+/// A `TcpStream` wrapped by native-tls
 pub type NativeTlsStream = native_tls::TlsStream<TcpStream>;
 
 #[cfg(feature = "native-tls")]
-/// A MidHandshakeTlsStream from native-tls
+/// A `MidHandshakeTlsStream` from native-tls
 pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<TcpStream>;
 
 #[cfg(feature = "native-tls")]
-/// A HandshakeError from native-tls
+/// A `HandshakeError` from native-tls
 pub type NativeTlsHandshakeError = native_tls::HandshakeError<TcpStream>;
 
 #[cfg(feature = "openssl")]
-/// Reexport openssl's TlsConnector
+/// Reexport openssl's `TlsConnector`
 pub use openssl::ssl::{SslConnector as OpenSslConnector, SslMethod as OpenSslMethod};
 
 #[cfg(feature = "openssl")]
-/// A TcpStream wrapped by openssl
+/// A `TcpStream` wrapped by openssl
 pub type OpenSslStream = openssl::ssl::SslStream<TcpStream>;
 
 #[cfg(feature = "openssl")]
-/// A MidHandshakeTlsStream from openssl
+/// A `MidHandshakeTlsStream` from openssl
 pub type OpenSslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<TcpStream>;
 
 #[cfg(feature = "openssl")]
-/// A HandshakeError from openssl
+/// A `HandshakeError` from openssl
 pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
 
 #[cfg(feature = "openssl")]
-/// An ErrorStack from openssl
+/// An `ErrorStack` from openssl
 pub type OpenSslErrorStack = openssl::error::ErrorStack;
 
 #[cfg(feature = "rustls-connector")]
-/// Reexport rustls-connector's TlsConnector
+/// Reexport rustls-connector's `TlsConnector`
 pub use rustls_connector::{RustlsConnector, RustlsConnectorConfig};
 
 #[cfg(feature = "rustls-connector")]
-/// A TcpStream wrapped by rustls
+/// A `TcpStream` wrapped by rustls
 pub type RustlsStream = rustls_connector::TlsStream<TcpStream>;
 
 #[cfg(feature = "rustls-connector")]
-/// A MidHandshakeTlsStream from rustls_connector
+/// A `MidHandshakeTlsStream` from rustls-connector
 pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<TcpStream>;
 
 #[cfg(feature = "rustls-connector")]
-/// A HandshakeError from rustls_connector
+/// A `HandshakeError` from rustls-connector
 pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
 
 /// Wrapper around plain or TLS TCP streams
@@ -149,7 +149,8 @@ pub struct OwnedTLSConfig {
 }
 
 impl OwnedTLSConfig {
-    /// Get the ephemeral TLSConfig corresponding to the OwnedTLSConfig
+    /// Get the ephemeral `TLSConfig` corresponding to the `OwnedTLSConfig`
+    #[must_use]
     pub fn as_ref(&self) -> TLSConfig<'_, '_, '_> {
         TLSConfig {
             identity: self.identity.as_ref().map(OwnedIdentity::as_ref),
@@ -177,7 +178,8 @@ pub struct OwnedIdentity {
 }
 
 impl OwnedIdentity {
-    /// Get the ephemeral Identity corresponding to the OwnedIdentity
+    /// Get the ephemeral `Identity` corresponding to the `OwnedIdentity`
+    #[must_use]
     pub fn as_ref(&self) -> Identity<'_, '_> {
         Identity {
             der: &self.der,
@@ -186,27 +188,27 @@ impl OwnedIdentity {
     }
 }
 
-/// Holds either the TLS TcpStream result or the current handshake state
+/// Holds either the TLS `TcpStream` result or the current handshake state
 pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 
 impl TcpStream {
-    /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect
+    /// Wrapper around `std::net::TcpStream::connect`
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
         connect_std(addr, None).and_then(Self::try_from)
     }
 
-    /// Wrapper around mio's TcpStream::connect inspired by std::net::TcpStream::connect_timeout
-    /// and std::net::TcpStream::connect. We used the timeout on the first SocketAddr.
+    /// Wrapper around `std::net::TcpStream::connect_timeout`
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
         connect_std(addr, Some(timeout)).and_then(Self::try_from)
     }
 
-    /// Wrapper around mio's TcpStream::from_std
+    /// Convert from a `std::net::TcpStream`
     pub fn from_std(stream: StdTcpStream) -> io::Result<Self> {
         Self::try_from(stream)
     }
 
     /// Check whether the stream is connected or not
+    #[must_use]
     pub fn is_connected(&self) -> bool {
         if let Self::Plain(_, connected) = self {
             *connected
@@ -253,7 +255,7 @@ impl TcpStream {
     /// Enable TLS using native-tls
     pub fn into_native_tls(
         self,
-        connector: NativeTlsConnector,
+        connector: &NativeTlsConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
@@ -263,7 +265,7 @@ impl TcpStream {
     /// Enable TLS using openssl
     pub fn into_openssl(
         self,
-        connector: OpenSslConnector,
+        connector: &OpenSslConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
@@ -273,7 +275,7 @@ impl TcpStream {
     /// Enable TLS using rustls
     pub fn into_rustls(
         self,
-        connector: RustlsConnector,
+        connector: &RustlsConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
@@ -329,8 +331,7 @@ fn into_rustls_common(
         let key = if let Some(key) = pfx
             .key_bags(identity.password)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
-            .iter()
-            .next()
+            .get(0)
         {
             PrivateKey(key.clone())
         } else {
@@ -354,7 +355,7 @@ fn into_rustls_common(
                 io::Error::new(io::ErrorKind::Other, "Failed to import certificates chain")
             })?;
     }
-    s.into_rustls(c.into(), domain)
+    s.into_rustls(&c.into(), domain)
 }
 
 cfg_if! {
@@ -390,7 +391,7 @@ cfg_if! {
                     builder.cert_store_mut().add_cert(cert)?;
                 }
             }
-            s.into_openssl(builder.build(), domain)
+            s.into_openssl(&builder.build(), domain)
         }
     } else if #[cfg(feature = "native-tls")] {
         fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
@@ -405,7 +406,7 @@ cfg_if! {
                     builder.add_root_certificate(Certificate::from_der(&cert.contents[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
                 }
             }
-            s.into_native_tls(builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
+            s.into_native_tls(&builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
         fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_, '_>) -> HandshakeResult {
@@ -572,6 +573,7 @@ pub enum MidHandshakeTlsStream {
 
 impl MidHandshakeTlsStream {
     /// Get a reference to the inner stream
+    #[must_use]
     pub fn get_ref(&self) -> &TcpStream {
         match self {
             MidHandshakeTlsStream::Plain(mid) => mid,
@@ -585,6 +587,7 @@ impl MidHandshakeTlsStream {
     }
 
     /// Get a mutable reference to the inner stream
+    #[must_use]
     pub fn get_mut(&mut self) -> &mut TcpStream {
         match self {
             MidHandshakeTlsStream::Plain(mid) => mid,
