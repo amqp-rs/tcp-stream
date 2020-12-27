@@ -14,7 +14,7 @@ license       = "BSD-2-Clause"
 name = "tcp_stream"
 
 [features]
-default                   = ["native-tls"]
+default                   = ["rustls"]
 dangerous-configuration   = ["rustls-connector/dangerous-configuration"]
 native-tls                = ["native-tls-crate", "pem"]
 quic                      = ["rustls-connector/quic"]
