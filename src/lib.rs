@@ -308,8 +308,10 @@ fn connect_mio<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
         }
     }
     for addr in addrs {
-        match MioTcpStream::connect(addr) {
-            Ok(stream) => return Ok(stream),
+        match StdTcpStream::connect(&addr)
+            .and_then(|stream| stream.set_nonblocking(true).map(|()| stream))
+        {
+            Ok(stream) => return Ok(MioTcpStream::from_std(stream)),
             Err(error) => err = Some(error),
         }
     }
