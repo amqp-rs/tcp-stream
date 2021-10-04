@@ -402,7 +402,7 @@ cfg_if! {
                 builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
             }
             if let Some(cert_chain) = config.cert_chain.as_ref() {
-                for cert in pem::parse_many(cert_chain).iter().rev() {
+                for cert in pem::parse_many(cert_chain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.iter().rev() {
                     builder.add_root_certificate(Certificate::from_der(&cert.contents[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
                 }
             }
