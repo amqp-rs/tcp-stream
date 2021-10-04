@@ -16,7 +16,7 @@ name = "tcp_stream"
 [features]
 default                   = ["rustls"]
 dangerous-configuration   = ["rustls-connector/dangerous-configuration"]
-native-tls                = ["native-tls-crate", "pem"]
+native-tls                = ["native-tls-crate", "rustls-pemfile"]
 quic                      = ["rustls-connector/quic"]
 rustls                    = ["rustls-native-certs"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
@@ -40,8 +40,8 @@ optional = true
 version = "^0.2"
 optional = true
 
-[dependencies.pem]
-version = "^1.0"
+[dependencies.rustls-pemfile]
+version = "^0.2"
 optional = true
 
 [dependencies.rustls-connector]

@@ -401,9 +401,12 @@ cfg_if! {
             if let Some(identity) = config.identity {
                 builder.identity(native_tls::Identity::from_pkcs12(identity.der, identity.password).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
             }
-            if let Some(cert_chain) = config.cert_chain.as_ref() {
-                for cert in pem::parse_many(cert_chain).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?.iter().rev() {
-                    builder.add_root_certificate(Certificate::from_der(&cert.contents[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+            if let Some(cert_chain) = config.cert_chain {
+                let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
+                for cert in rustls_pemfile::read_all(&mut cert_chain)?.iter().rev() {
+                    if let rustls_pemfile::Item::X509Certificate(cert) = cert {
+                        builder.add_root_certificate(Certificate::from_der(&cert[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
+                    }
                 }
             }
             s.into_native_tls(&builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
