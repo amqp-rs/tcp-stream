@@ -326,8 +326,7 @@ fn into_rustls_common(
     use rustls_connector::rustls::{Certificate, PrivateKey};
 
     if let Some(identity) = config.identity {
-        let pfx = pkcs_12::PFX::parse(identity.der)
-            .map_err(io::Error::from)?;
+        let pfx = pkcs_12::PFX::parse(identity.der).map_err(io::Error::from)?;
         let key = if let Some(key) = pfx
             .key_bags(identity.password)
             .map_err(io::Error::from)?
