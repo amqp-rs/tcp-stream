@@ -321,11 +321,17 @@ fn into_rustls_common(
     s: TcpStream,
     mut c: RustlsConnectorConfig,
     domain: &str,
-    mut config: TLSConfig<'_, '_, '_>,
+    config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
     use rustls_connector::rustls::{Certificate, PrivateKey};
 
-    if let Some(identity) = config.identity {
+    if let Some(cert_chain) = config.cert_chain {
+        let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
+        let certs = rustls_pemfile::certs(&mut cert_chain)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        c.add_parsable_certificates(&certs);
+    }
+    let connector = if let Some(identity) = config.identity {
         let pfx = pkcs_12::PFX::parse(identity.der).map_err(io::Error::from)?;
         let key = if let Some(key) = pfx
             .key_bags(identity.password)
@@ -344,17 +350,12 @@ fn into_rustls_common(
             .iter()
             .map(|cert| Certificate(cert.clone()))
             .collect();
-        c.set_single_client_cert(certs, key)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-    }
-    if let Some(cert_chain) = config.cert_chain.as_mut() {
-        c.root_store
-            .add_pem_file(&mut cert_chain.as_bytes())
-            .map_err(|()| {
-                io::Error::new(io::ErrorKind::Other, "Failed to import certificates chain")
-            })?;
-    }
-    s.into_rustls(&c.into(), domain)
+        c.connector_with_single_cert(certs, key)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+    } else {
+        c.connector_with_no_client_auth()
+    };
+    s.into_rustls(&connector, domain)
 }
 
 cfg_if! {
