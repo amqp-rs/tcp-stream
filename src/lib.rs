@@ -332,7 +332,7 @@ fn into_rustls_common(
         c.add_parsable_certificates(&certs);
     }
     let connector = if let Some(identity) = config.identity {
-        let pfx = pkcs_12::PFX::parse(identity.der).map_err(io::Error::from)?;
+        let pfx = p12::PFX::parse(identity.der).map_err(io::Error::from)?;
         let key = if let Some(key) = pfx
             .key_bags(identity.password)
             .map_err(io::Error::from)?
