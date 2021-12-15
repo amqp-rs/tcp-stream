@@ -21,7 +21,7 @@ quic                      = ["rustls-connector/quic"]
 rustls                    = ["rustls-native-certs"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
-rustls-common             = ["rustls-connector", "pkcs-12"]
+rustls-common             = ["rustls-connector", "p12"]
 vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
@@ -41,8 +41,8 @@ optional = true
 version  = "^0.10"
 optional = true
 
-[dependencies.pkcs-12]
-version = "^0.3.1"
+[dependencies.p12]
+version = "^0.4"
 optional = true
 
 [dependencies.pem]
