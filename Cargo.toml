@@ -2,13 +2,14 @@
 name          = "tcp-stream"
 version       = "0.23.1" # remember to update html_root_url
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
-edition       = "2018"
+edition       = "2021"
 description   = "std::net::TcpStream on steroids"
 repository    = "https://github.com/Keruspe/tcp-stream"
 documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
 license       = "BSD-2-Clause"
+rust-version  = "1.56.0"
 
 [lib]
 name = "tcp_stream"
@@ -45,7 +46,7 @@ version = "^0.2"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.15"
+version          = "^0.16"
 optional         = true
 default-features = false
 
