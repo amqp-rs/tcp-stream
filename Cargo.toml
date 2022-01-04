@@ -4,7 +4,7 @@ version       = "0.24.0" # remember to update html_root_url
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2021"
 description   = "std::net::TcpStream on steroids"
-repository    = "https://github.com/Keruspe/tcp-stream"
+repository    = "https://github.com/amqp-rs/tcp-stream"
 documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
@@ -54,5 +54,4 @@ default-features = false
 all-features = true
 
 [badges]
-travis-ci = { repository = "Keruspe/tcp-stream" }
-appveyor  = { repository = "Keruspe/tcp-stream" }
+maintenance = { status = "actively-developed" }
