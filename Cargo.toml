@@ -42,7 +42,7 @@ version  = "^0.10"
 optional = true
 
 [dependencies.p12]
-version = "^0.4"
+version = "^0.5"
 optional = true
 
 [dependencies.pem]
