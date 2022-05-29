@@ -300,7 +300,10 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
     Ok(stream)
 }
 
-fn connect_std_raw<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
+fn connect_std_raw<A: ToSocketAddrs>(
+    addr: A,
+    timeout: Option<Duration>,
+) -> io::Result<StdTcpStream> {
     let mut addrs = addr.to_socket_addrs()?;
     let mut err = None;
     if let Some(timeout) = timeout {
