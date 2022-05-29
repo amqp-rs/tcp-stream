@@ -1,6 +1,6 @@
 #![deny(missing_docs)]
 #![warn(rust_2018_idioms)]
-#![doc(html_root_url = "https://docs.rs/tcp-stream/0.24.3/")]
+#![doc(html_root_url = "https://docs.rs/tcp-stream/0.24.4/")]
 
 //! # std::net::TCP stream on steroids
 //!
