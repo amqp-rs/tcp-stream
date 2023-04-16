@@ -9,7 +9,7 @@ documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
 license       = "BSD-2-Clause"
-rust-version  = "1.56.0"
+rust-version  = "1.57.0"
 
 [lib]
 name = "tcp_stream"
