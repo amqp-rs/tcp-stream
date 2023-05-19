@@ -754,7 +754,7 @@ impl From<RustlsHandshakeError> for HandshakeError {
     fn from(error: RustlsHandshakeError) -> Self {
         match error {
             rustls_connector::HandshakeError::WouldBlock(mid) => {
-                HandshakeError::WouldBlock(mid.into())
+                HandshakeError::WouldBlock((*mid).into())
             }
             rustls_connector::HandshakeError::Failure(failure) => HandshakeError::Failure(failure),
         }
