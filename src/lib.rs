@@ -16,7 +16,7 @@
 //! use std::io::{self, Read, Write};
 //!
 //! fn main() {
-//!     let mut stream = TcpStream::connect("google.com:443").unwrap();
+//!     let mut stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
 //!     stream.set_nonblocking(true).unwrap();
 //!
 //!     while !stream.is_connected() {
@@ -25,7 +25,7 @@
 //!         }
 //!     }
 //!
-//!     let mut stream = stream.into_tls("google.com", TLSConfig::default());
+//!     let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default());
 //!
 //!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
 //!         stream = mid_handshake.handshake();
