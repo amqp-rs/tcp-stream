@@ -16,9 +16,7 @@ name = "tcp_stream"
 
 [features]
 default                   = ["rustls"]
-dangerous-configuration   = ["rustls-connector/dangerous-configuration"]
-native-tls                = ["native-tls-crate", "rustls-pemfile"]
-quic                      = ["rustls-connector/quic"]
+native-tls                = ["dep:native-tls", "rustls-pemfile"]
 rustls                    = ["rustls-native-certs"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
@@ -28,8 +26,7 @@ vendored-openssl          = ["openssl/vendored"]
 [dependencies]
 cfg-if = "^1.0"
 
-[dependencies.native-tls-crate]
-package  = "native-tls"
+[dependencies.native-tls]
 version  = "^0.2"
 optional = true
 
@@ -42,11 +39,11 @@ version = "^0.6"
 optional = true
 
 [dependencies.rustls-pemfile]
-version = "^1.0"
+version = "^2.0"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.18"
+version          = "^0.19.2"
 optional         = true
 default-features = false
 

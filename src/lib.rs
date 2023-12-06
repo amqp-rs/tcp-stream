@@ -61,9 +61,6 @@ use std::{
 };
 
 #[cfg(feature = "native-tls")]
-use native_tls_crate as native_tls;
-
-#[cfg(feature = "native-tls")]
 /// Reexport native-tls's `TlsConnector`
 pub use native_tls::TlsConnector as NativeTlsConnector;
 
@@ -332,13 +329,14 @@ fn into_rustls_common(
     domain: &str,
     config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
-    use rustls_connector::rustls::{Certificate, PrivateKey};
+    use rustls_connector::rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
     if let Some(cert_chain) = config.cert_chain {
         let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
         let certs = rustls_pemfile::certs(&mut cert_chain)
+            .collect::<Result<Vec<_>, _>>()
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-        c.add_parsable_certificates(&certs);
+        c.add_parsable_certificates(certs);
     }
     let connector = if let Some(identity) = config.identity {
         let pfx = p12::PFX::parse(identity.der).map_err(io::Error::from)?;
@@ -347,7 +345,7 @@ fn into_rustls_common(
             .map_err(io::Error::from)?
             .get(0)
         {
-            PrivateKey(key.clone())
+            PrivateKeyDer::from(PrivatePkcs8KeyDer::from(key.clone()))
         } else {
             return Err(
                 io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
@@ -357,7 +355,7 @@ fn into_rustls_common(
             .cert_bags(identity.password)
             .map_err(io::Error::from)?
             .iter()
-            .map(|cert| Certificate(cert.clone()))
+            .map(|cert| CertificateDer::from(cert.clone()))
             .collect();
         c.connector_with_single_cert(certs, key)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
