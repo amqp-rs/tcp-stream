@@ -410,10 +410,8 @@ cfg_if! {
             }
             if let Some(cert_chain) = config.cert_chain {
                 let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
-                for cert in rustls_pemfile::read_all(&mut cert_chain)?.iter().rev() {
-                    if let rustls_pemfile::Item::X509Certificate(cert) = cert {
-                        builder.add_root_certificate(Certificate::from_der(&cert[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
-                    }
+                for cert in rustls_pemfile::certs(&mut cert_chain).collect::<Result<Vec<_>, _>>()? {
+                    builder.add_root_certificate(Certificate::from_der(&cert[..]).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?);
                 }
             }
             s.into_native_tls(&builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
