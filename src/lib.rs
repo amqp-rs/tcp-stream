@@ -337,23 +337,18 @@ fn into_rustls_common(
         c.add_parsable_certificates(certs);
     }
     let connector = if let Some(identity) = config.identity {
-        let pfx = p12::PFX::parse(identity.der).map_err(io::Error::from)?;
-        let key = if let Some(key) = pfx
-            .key_bags(identity.password)
-            .map_err(io::Error::from)?
-            .get(0)
-        {
-            PrivateKeyDer::from(PrivatePkcs8KeyDer::from(key.clone()))
-        } else {
+        let pfx = p12_keystore::KeyStore::from_pkcs12(identity.der, identity.password)
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+        let Some((_, keychain)) = pfx.private_key_chain() else {
             return Err(
                 io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
             );
         };
-        let certs = pfx
-            .cert_bags(identity.password)
-            .map_err(io::Error::from)?
+        let key = PrivateKeyDer::from(PrivatePkcs8KeyDer::from(keychain.key().to_vec()));
+        let certs = keychain
+            .chain()
             .iter()
-            .map(|cert| CertificateDer::from(cert.clone()))
+            .map(|cert| CertificateDer::from(cert.as_der().to_vec()))
             .collect();
         c.connector_with_single_cert(certs, key)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?

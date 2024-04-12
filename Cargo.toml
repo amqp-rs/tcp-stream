@@ -20,7 +20,7 @@ native-tls                = ["dep:native-tls", "rustls-pemfile"]
 rustls                    = ["rustls-native-certs"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
-rustls-common             = ["rustls-connector", "rustls-pemfile", "p12"]
+rustls-common             = ["rustls-connector", "rustls-pemfile", "p12-keystore"]
 vendored-openssl          = ["openssl/vendored"]
 
 [dependencies]
@@ -34,8 +34,8 @@ optional = true
 version  = "^0.10"
 optional = true
 
-[dependencies.p12]
-version = "^0.6"
+[dependencies.p12-keystore]
+version = "^0.1"
 optional = true
 
 [dependencies.rustls-pemfile]
