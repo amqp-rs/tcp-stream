@@ -6,6 +6,14 @@
 
 tcp-stream is a library aiming at providing TLS support to std::net::TcpStream
 
+## Warning about crypto backends for rustls
+
+A crypto implementation must be enabled in rustls using feature flags.
+We mimic what rustls does, providing one feature flag per implementation and enabling the same as rustls by default.
+Available options are:
+- `rustls--aws_lc_rs` (default)
+- `rustls--ring`
+
 # Examples
 
 To connect to a remote server:
