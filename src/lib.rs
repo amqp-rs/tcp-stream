@@ -761,8 +761,14 @@ mod sys {
     use crate::TcpStream;
     use std::{
         net::TcpStream as StdTcpStream,
-        os::unix::io::{AsRawFd, FromRawFd, RawFd},
+        os::unix::io::{AsFd, AsRawFd, BorrowedFd, FromRawFd, RawFd},
     };
+
+    impl AsFd for TcpStream {
+        fn as_fd(&self) -> BorrowedFd<'_> {
+            <StdTcpStream as AsFd>::as_fd(self)
+        }
+    }
 
     impl AsRawFd for TcpStream {
         fn as_raw_fd(&self) -> RawFd {
@@ -788,8 +794,14 @@ mod sys {
     use crate::TcpStream;
     use std::{
         net::TcpStream as StdTcpStream,
-        os::windows::io::{AsRawSocket, FromRawSocket, RawSocket},
+        os::windows::io::{AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, RawSocket},
     };
+
+    impl AsSocket for TcpStream {
+        fn as_socket(&self) -> BorrowedSocket<'_> {
+            <StdTcpStream as AsSocket>::as_socket(self)
+        }
+    }
 
     impl AsRawSocket for TcpStream {
         fn as_raw_socket(&self) -> RawSocket {
