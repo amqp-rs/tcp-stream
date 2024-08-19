@@ -13,38 +13,36 @@
 //!
 //! use std::io::{self, Read, Write};
 //!
-//! fn main() {
-//!     let mut stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
-//!     stream.set_nonblocking(true).unwrap();
+//! let mut stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
+//! stream.set_nonblocking(true).unwrap();
 //!
-//!     while !stream.is_connected() {
-//!         if stream.try_connect().unwrap() {
-//!             break;
-//!         }
+//! while !stream.is_connected() {
+//!     if stream.try_connect().unwrap() {
+//!         break;
 //!     }
-//!
-//!     let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default());
-//!
-//!     while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
-//!         stream = mid_handshake.handshake();
-//!     }
-//!
-//!     let mut stream = stream.unwrap();
-//!
-//!     while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
-//!         if err.kind() != io::ErrorKind::WouldBlock {
-//!             panic!("error: {:?}", err);
-//!         }
-//!     }
-//!     stream.flush().unwrap();
-//!     let mut res = vec![];
-//!     while let Err(err) = stream.read_to_end(&mut res) {
-//!         if err.kind() != io::ErrorKind::WouldBlock {
-//!             panic!("stream error: {:?}", err);
-//!         }
-//!     }
-//!     println!("{}", String::from_utf8_lossy(&res));
 //! }
+//!
+//! let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default());
+//!
+//! while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
+//!     stream = mid_handshake.handshake();
+//! }
+//!
+//! let mut stream = stream.unwrap();
+//!
+//! while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
+//!     if err.kind() != io::ErrorKind::WouldBlock {
+//!         panic!("error: {:?}", err);
+//!     }
+//! }
+//! stream.flush().unwrap();
+//! let mut res = vec![];
+//! while let Err(err) = stream.read_to_end(&mut res) {
+//!     if err.kind() != io::ErrorKind::WouldBlock {
+//!         panic!("stream error: {:?}", err);
+//!     }
+//! }
+//! println!("{}", String::from_utf8_lossy(&res));
 //! ```
 
 use cfg_if::cfg_if;
@@ -94,19 +92,19 @@ pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
 /// An `ErrorStack` from openssl
 pub type OpenSslErrorStack = openssl::error::ErrorStack;
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 /// Reexport rustls-connector's `TlsConnector`
 pub use rustls_connector::{RustlsConnector, RustlsConnectorConfig};
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 /// A `TcpStream` wrapped by rustls
 pub type RustlsStream = rustls_connector::TlsStream<TcpStream>;
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 /// A `MidHandshakeTlsStream` from rustls-connector
 pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<TcpStream>;
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 /// A `HandshakeError` from rustls-connector
 pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
 
@@ -120,7 +118,7 @@ pub enum TcpStream {
     #[cfg(feature = "openssl")]
     /// Wrapper around a TLS stream hanled by openssl
     OpenSsl(Box<OpenSslStream>),
-    #[cfg(feature = "rustls-connector")]
+    #[cfg(feature = "rustls-common")]
     /// Wrapper around a TLS stream hanled by rustls
     Rustls(Box<RustlsStream>),
 }
@@ -266,7 +264,7 @@ impl TcpStream {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
-    #[cfg(feature = "rustls-connector")]
+    #[cfg(feature = "rustls-common")]
     /// Enable TLS using rustls
     pub fn into_rustls(
         self,
@@ -440,7 +438,7 @@ impl From<OpenSslStream> for TcpStream {
     }
 }
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 impl From<RustlsStream> for TcpStream {
     fn from(s: RustlsStream) -> Self {
         TcpStream::Rustls(Box::new(s))
@@ -469,7 +467,7 @@ impl Deref for TcpStream {
             TcpStream::NativeTls(tls) => tls.get_ref(),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls) => tls.get_ref(),
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             TcpStream::Rustls(tls) => tls.get_ref(),
         }
     }
@@ -483,7 +481,7 @@ impl DerefMut for TcpStream {
             TcpStream::NativeTls(tls) => tls.get_mut(),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(tls) => tls.get_mut(),
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             TcpStream::Rustls(tls) => tls.get_mut(),
         }
     }
@@ -497,7 +495,7 @@ macro_rules! fwd_impl {
             TcpStream::NativeTls(ref mut tls) => tls.$method($($args),*),
             #[cfg(feature = "openssl")]
             TcpStream::OpenSsl(ref mut tls) => tls.$method($($args),*),
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             TcpStream::Rustls(ref mut tls) => tls.$method($($args),*),
         }
     };
@@ -567,7 +565,7 @@ pub enum MidHandshakeTlsStream {
     #[cfg(feature = "openssl")]
     /// An openssl MidHandshakeTlsStream
     Openssl(OpenSslMidHandshakeTlsStream),
-    #[cfg(feature = "rustls-connector")]
+    #[cfg(feature = "rustls-common")]
     /// A rustls-connector MidHandshakeTlsStream
     Rustls(RustlsMidHandshakeTlsStream),
 }
@@ -582,7 +580,7 @@ impl MidHandshakeTlsStream {
             MidHandshakeTlsStream::NativeTls(mid) => mid.get_ref(),
             #[cfg(feature = "openssl")]
             MidHandshakeTlsStream::Openssl(mid) => mid.get_ref(),
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             MidHandshakeTlsStream::Rustls(mid) => mid.get_ref(),
         }
     }
@@ -596,7 +594,7 @@ impl MidHandshakeTlsStream {
             MidHandshakeTlsStream::NativeTls(mid) => mid.get_mut(),
             #[cfg(feature = "openssl")]
             MidHandshakeTlsStream::Openssl(mid) => mid.get_mut(),
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             MidHandshakeTlsStream::Rustls(mid) => mid.get_mut(),
         }
     }
@@ -624,7 +622,7 @@ impl MidHandshakeTlsStream {
                 }
                 mid.handshake()?.into()
             }
-            #[cfg(feature = "rustls-connector")]
+            #[cfg(feature = "rustls-common")]
             MidHandshakeTlsStream::Rustls(mut mid) => {
                 if !mid.get_mut().try_connect()? {
                     return Err(HandshakeError::WouldBlock(mid.into()));
@@ -655,7 +653,7 @@ impl From<OpenSslMidHandshakeTlsStream> for MidHandshakeTlsStream {
     }
 }
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 impl From<RustlsMidHandshakeTlsStream> for MidHandshakeTlsStream {
     fn from(mid: RustlsMidHandshakeTlsStream) -> Self {
         MidHandshakeTlsStream::Rustls(mid)
@@ -738,7 +736,7 @@ impl From<OpenSslErrorStack> for HandshakeError {
     }
 }
 
-#[cfg(feature = "rustls-connector")]
+#[cfg(feature = "rustls-common")]
 impl From<RustlsHandshakeError> for HandshakeError {
     fn from(error: RustlsHandshakeError) -> Self {
         match error {
@@ -784,7 +782,7 @@ mod sys {
 
     impl FromRawFd for TcpStream {
         unsafe fn from_raw_fd(fd: RawFd) -> Self {
-            Self::Plain(StdTcpStream::from_raw_fd(fd), false)
+            Self::Plain(unsafe { StdTcpStream::from_raw_fd(fd) }, false)
         }
     }
 }
@@ -817,7 +815,7 @@ mod sys {
 
     impl FromRawSocket for TcpStream {
         unsafe fn from_raw_socket(socket: RawSocket) -> Self {
-            Self::Plain(StdTcpStream::from_raw_socket(socket), false)
+            Self::Plain(unsafe { StdTcpStream::from_raw_socket(socket) }, false)
         }
     }
 }

@@ -16,16 +16,17 @@ name = "tcp_stream"
 
 [features]
 default                   = ["rustls-native-certs", "rustls--aws_lc_rs"]
-native-tls                = ["dep:native-tls", "rustls-pemfile"]
+native-tls                = ["dep:native-tls", "dep:rustls-pemfile"]
+openssl                   = ["dep:openssl"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
-rustls-common             = ["rustls-connector", "rustls-pemfile", "p12-keystore"]
-vendored-openssl          = ["openssl/vendored"]
+rustls-common             = ["dep:rustls-connector", "dep:rustls-pemfile", "dep:p12-keystore"]
+vendored-openssl          = ["openssl", "openssl/vendored"]
 
 # rustls crypto providers. Choose at least one. Otherwise, runtime errors.
 # See https://docs.rs/rustls/latest/rustls/#crate-features. for more info
-rustls--aws_lc_rs         = ["rustls-connector/rustls--aws_lc_rs"] # default, but doesn't build everywhere
-rustls--ring              = ["rustls-connector/rustls--ring"] # more compatible, (e.g., easily builds on Windows)
+rustls--aws_lc_rs         = ["dep:rustls-connector", "rustls-connector/rustls--aws_lc_rs"] # default, but doesn't build everywhere
+rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--ring"] # more compatible, (e.g., easily builds on Windows)
 
 [dependencies]
 cfg-if = "^1.0"
