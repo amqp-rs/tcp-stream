@@ -169,8 +169,8 @@ pub enum Identity<'der, 'cert, 'pass> {
         /// PEM-encoded identity
         der: &'der [u8],
         /// PEM-encoded certificate
-        cert: &'cert [u8]
-    }
+        cert: &'cert [u8],
+    },
 }
 
 /// Holds one of:
@@ -190,8 +190,8 @@ pub enum OwnedIdentity {
         /// PEM-encoded identity
         der: Vec<u8>,
         /// PEM-encoded certificate
-        cert: Vec<u8>
-    }
+        cert: Vec<u8>,
+    },
 }
 
 impl OwnedIdentity {
@@ -200,7 +200,7 @@ impl OwnedIdentity {
     pub fn as_ref(&self) -> Identity<'_, '_, '_> {
         match self {
             Self::PEM { der, cert } => Identity::PEM { der, cert },
-            Self::PKCS12 { der, password } => Identity::PKCS12 { der, password }
+            Self::PKCS12 { der, password } => Identity::PKCS12 { der, password },
         }
     }
 }
@@ -351,7 +351,9 @@ fn into_rustls_common(
     domain: &str,
     config: TLSConfig<'_, '_, '_, '_>,
 ) -> HandshakeResult {
-    use rustls_connector::rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use rustls_connector::rustls_pki_types::{
+        pem::PemObject, CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer,
+    };
 
     if let Some(cert_chain) = config.cert_chain {
         let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
@@ -366,23 +368,32 @@ fn into_rustls_common(
                 let pfx = p12_keystore::KeyStore::from_pkcs12(der, password)
                     .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
                 let Some((_, keychain)) = pfx.private_key_chain() else {
-                    return Err(
-                        io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
-                    );
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "No private key in pkcs12 DER",
+                    )
+                    .into());
                 };
                 let certs = keychain
                     .chain()
                     .iter()
                     .map(|cert| CertificateDer::from(cert.as_der().to_vec()))
                     .collect();
-                (certs, PrivateKeyDer::from(PrivatePkcs8KeyDer::from(keychain.key().to_vec())))
-            },
+                (
+                    certs,
+                    PrivateKeyDer::from(PrivatePkcs8KeyDer::from(keychain.key().to_vec())),
+                )
+            }
             Identity::PEM { der, cert } => {
                 let mut cert_reader = std::io::BufReader::new(cert);
                 let certs = rustls_pemfile::certs(&mut cert_reader)
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
-                (certs, PrivateKeyDer::from_pem_slice(der).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?)
+                (
+                    certs,
+                    PrivateKeyDer::from_pem_slice(der)
+                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
+                )
             }
         };
         c.connector_with_single_cert(certs, key)
