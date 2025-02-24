@@ -125,9 +125,9 @@ pub enum TcpStream {
 
 /// Holds extra TLS configuration
 #[derive(Default, Debug, PartialEq)]
-pub struct TLSConfig<'der, 'pass, 'chain> {
+pub struct TLSConfig<'der, 'cert, 'pass, 'chain> {
     /// Use for client certificate authentication
-    pub identity: Option<Identity<'der, 'pass>>,
+    pub identity: Option<Identity<'der, 'cert, 'pass>>,
     /// The custom certificates chain in PEM format
     pub cert_chain: Option<&'chain str>,
 }
@@ -144,7 +144,7 @@ pub struct OwnedTLSConfig {
 impl OwnedTLSConfig {
     /// Get the ephemeral `TLSConfig` corresponding to the `OwnedTLSConfig`
     #[must_use]
-    pub fn as_ref(&self) -> TLSConfig<'_, '_, '_> {
+    pub fn as_ref(&self) -> TLSConfig<'_, '_, '_, '_> {
         TLSConfig {
             identity: self.identity.as_ref().map(OwnedIdentity::as_ref),
             cert_chain: self.cert_chain.as_deref(),
@@ -152,31 +152,55 @@ impl OwnedTLSConfig {
     }
 }
 
-/// Holds PKCS#12 DER-encoded identity and decryption password
+/// Holds one of:
+/// - PKCS#12 DER-encoded identity and decryption password
+/// - PEM-encoded DER identity (without decryption password)
 #[derive(Debug, PartialEq)]
-pub struct Identity<'der, 'pass> {
-    /// PKCS#12 DER-encoded identity
-    pub der: &'der [u8],
-    /// Decryption password
-    pub password: &'pass str,
+pub enum Identity<'der, 'cert, 'pass> {
+    /// PKCS#12 DER-encoded identity with decryption password
+    PKCS12 {
+        /// PKCS#12 DER-encoded identity
+        der: &'der [u8],
+        /// Decryption password
+        password: &'pass str,
+    },
+    /// PEM encoded DER private key with PEM encoded certificate
+    PEM {
+        /// PEM-encoded identity
+        der: &'der [u8],
+        /// PEM-encoded certificate
+        cert: &'cert [u8]
+    }
 }
 
-/// Holds PKCS#12 DER-encoded identity and decryption password
+/// Holds one of:
+/// - PKCS#12 DER-encoded identity and decryption password
+/// - PEM-encoded DER identity (without decryption password)
 #[derive(Debug, PartialEq)]
-pub struct OwnedIdentity {
-    /// PKCS#12 DER-encoded identity
-    pub der: Vec<u8>,
-    /// Decryption password
-    pub password: String,
+pub enum OwnedIdentity {
+    /// PKCS#12 DER-encoded identity with decryption password
+    PKCS12 {
+        /// PKCS#12 DER-encoded identity
+        der: Vec<u8>,
+        /// Decryption password
+        password: String,
+    },
+    /// PEM encoded DER private key with PEM encoded certificate
+    PEM {
+        /// PEM-encoded identity
+        der: Vec<u8>,
+        /// PEM-encoded certificate
+        cert: Vec<u8>
+    }
 }
 
 impl OwnedIdentity {
     /// Get the ephemeral `Identity` corresponding to the `OwnedIdentity`
     #[must_use]
-    pub fn as_ref(&self) -> Identity<'_, '_> {
-        Identity {
-            der: &self.der,
-            password: &self.password,
+    pub fn as_ref(&self) -> Identity<'_, '_, '_> {
+        match self {
+            Self::PEM { der, cert } => Identity::PEM { der, cert },
+            Self::PKCS12 { der, password } => Identity::PKCS12 { der, password }
         }
     }
 }
@@ -241,7 +265,7 @@ impl TcpStream {
     pub fn into_tls(
         self,
         domain: &str,
-        config: TLSConfig<'_, '_, '_>,
+        config: TLSConfig<'_, '_, '_, '_>,
     ) -> Result<Self, HandshakeError> {
         into_tls_impl(self, domain, config)
     }
@@ -325,9 +349,9 @@ fn into_rustls_common(
     s: TcpStream,
     mut c: RustlsConnectorConfig,
     domain: &str,
-    config: TLSConfig<'_, '_, '_>,
+    config: TLSConfig<'_, '_, '_, '_>,
 ) -> HandshakeResult {
-    use rustls_connector::rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use rustls_connector::rustls_pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 
     if let Some(cert_chain) = config.cert_chain {
         let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
@@ -337,19 +361,30 @@ fn into_rustls_common(
         c.add_parsable_certificates(certs);
     }
     let connector = if let Some(identity) = config.identity {
-        let pfx = p12_keystore::KeyStore::from_pkcs12(identity.der, identity.password)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-        let Some((_, keychain)) = pfx.private_key_chain() else {
-            return Err(
-                io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
-            );
+        let (certs, key) = match identity {
+            Identity::PKCS12 { der, password } => {
+                let pfx = p12_keystore::KeyStore::from_pkcs12(der, password)
+                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                let Some((_, keychain)) = pfx.private_key_chain() else {
+                    return Err(
+                        io::Error::new(io::ErrorKind::Other, "No private key in pkcs12 DER").into(),
+                    );
+                };
+                let certs = keychain
+                    .chain()
+                    .iter()
+                    .map(|cert| CertificateDer::from(cert.as_der().to_vec()))
+                    .collect();
+                (certs, PrivateKeyDer::from(PrivatePkcs8KeyDer::from(keychain.key().to_vec())))
+            },
+            Identity::PEM { der, cert } => {
+                let mut cert_reader = std::io::BufReader::new(cert);
+                let certs = rustls_pemfile::certs(&mut cert_reader)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+                (certs, PrivateKeyDer::from_pem_slice(der).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?)
+            }
         };
-        let key = PrivateKeyDer::from(PrivatePkcs8KeyDer::from(keychain.key().to_vec()));
-        let certs = keychain
-            .chain()
-            .iter()
-            .map(|cert| CertificateDer::from(cert.as_der().to_vec()))
-            .collect();
         c.connector_with_single_cert(certs, key)
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
     } else {
@@ -360,19 +395,19 @@ fn into_rustls_common(
 
 cfg_if! {
     if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
         }
     } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)
         }
     } else if #[cfg(feature = "rustls-common")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             into_rustls_common(s, RustlsConnectorConfig::default(), domain, config)
         }
     } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             use openssl::x509::X509;
 
             let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
@@ -398,7 +433,7 @@ cfg_if! {
             s.into_openssl(&builder.build(), domain)
         }
     } else if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             use native_tls::Certificate;
 
             let mut builder = NativeTlsConnector::builder();
@@ -414,7 +449,7 @@ cfg_if! {
             s.into_native_tls(&builder.build().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?, domain)
         }
     } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_, '_, '_>) -> HandshakeResult {
             Ok(s.into_plain()?)
         }
     }
