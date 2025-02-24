@@ -36,7 +36,7 @@ version  = "^0.2"
 optional = true
 
 [dependencies.openssl]
-version  = "^0.10"
+version  = "^0.10.46"
 optional = true
 
 [dependencies.p12-keystore]

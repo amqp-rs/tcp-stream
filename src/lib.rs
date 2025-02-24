@@ -377,10 +377,14 @@ cfg_if! {
 
             let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
             if let Some(identity) = config.identity {
-                let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse(identity.password)?;
-                builder.set_certificate(&identity.cert)?;
-                builder.set_private_key(&identity.pkey)?;
-                if let Some(chain) = identity.chain.as_ref() {
+                let identity = openssl::pkcs12::Pkcs12::from_der(identity.der)?.parse2(identity.password)?;
+                if let Some(cert) = identity.cert.as_ref() {
+                    builder.set_certificate(cert)?;
+                }
+                if let Some(pkey) = identity.pkey.as_ref() {
+                    builder.set_private_key(pkey)?;
+                }
+                if let Some(chain) = identity.ca.as_ref() {
                     for cert in chain.iter().rev() {
                         builder.add_extra_chain_cert(cert.to_owned())?;
                     }
