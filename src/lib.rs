@@ -202,6 +202,7 @@ impl TcpStream {
 
     /// Check whether the stream is connected or not
     #[must_use]
+    #[allow(irrefutable_let_patterns)]
     pub fn is_connected(&self) -> bool {
         if let Self::Plain(_, connected) = self {
             *connected
@@ -214,13 +215,14 @@ impl TcpStream {
     /// - Ok(true) if connected
     /// - Ok(false) if connecting
     /// - Err(_) if an error is encountered
+    #[allow(irrefutable_let_patterns)]
     pub fn try_connect(&mut self) -> io::Result<bool> {
         if self.is_connected() {
             return Ok(true);
         }
         match self.is_writable() {
             Ok(()) => {
-                if let Self::Plain(_, ref mut connected) = self {
+                if let Self::Plain(_, connected) = self {
                     *connected = true;
                 }
                 Ok(true)
@@ -490,13 +492,13 @@ impl DerefMut for TcpStream {
 macro_rules! fwd_impl {
     ($self:ident, $method:ident, $($args:expr),*) => {
         match $self {
-            TcpStream::Plain(ref mut plain, _) => plain.$method($($args),*),
+            TcpStream::Plain(plain, _) => plain.$method($($args),*),
             #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(ref mut tls) => tls.$method($($args),*),
+            TcpStream::NativeTls(tls) => tls.$method($($args),*),
             #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(ref mut tls) => tls.$method($($args),*),
+            TcpStream::OpenSsl(tls) => tls.$method($($args),*),
             #[cfg(feature = "rustls-common")]
-            TcpStream::Rustls(ref mut tls) => tls.$method($($args),*),
+            TcpStream::Rustls(tls) => tls.$method($($args),*),
         }
     };
 }
