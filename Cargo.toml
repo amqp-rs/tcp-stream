@@ -9,7 +9,7 @@ documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
 license       = "BSD-2-Clause"
-rust-version  = "1.80.0"
+rust-version  = "1.81.0"
 
 [lib]
 name = "tcp_stream"
@@ -48,7 +48,7 @@ version = "^2.0"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.21"
+version          = "^0.21.5"
 optional         = true
 default-features = false
 
