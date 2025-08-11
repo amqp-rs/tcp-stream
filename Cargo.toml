@@ -2,14 +2,14 @@
 name          = "tcp-stream"
 version       = "0.30.1"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
-edition       = "2021"
+edition       = "2024"
 description   = "std::net::TcpStream on steroids"
 repository    = "https://github.com/amqp-rs/tcp-stream"
 documentation = "https://docs.rs/tcp-stream"
 keywords      = ["tcp", "io", "async", "non-blocking"]
 categories    = ["asynchronous", "network-programming"]
 license       = "BSD-2-Clause"
-rust-version  = "1.81.0"
+rust-version  = "1.85.0"
 
 [lib]
 name = "tcp_stream"
