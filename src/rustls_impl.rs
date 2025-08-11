@@ -2,6 +2,9 @@ use crate::{
     HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, TLSConfig, TcpStream,
 };
 
+#[cfg(feature = "rustls-futures")]
+use crate::AsyncTcpStream;
+
 use rustls_connector::rustls_pki_types::{
     CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject,
 };
@@ -92,6 +95,17 @@ pub(crate) fn into_rustls_impl(
     config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
     s.into_rustls(&rustls_connector(c, config)?, domain)
+}
+
+#[cfg(feature = "rustls-futures")]
+#[allow(dead_code)]
+pub(crate) async fn into_rustls_impl_async(
+    s: AsyncTcpStream,
+    c: RustlsConnectorConfig,
+    domain: &str,
+    config: TLSConfig<'_, '_, '_>,
+) -> io::Result<AsyncTcpStream> {
+    s.into_rustls(&rustls_connector(c, config)?, domain).await
 }
 
 impl From<RustlsStream> for TcpStream {

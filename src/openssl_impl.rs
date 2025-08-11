@@ -2,6 +2,9 @@ use crate::{
     HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, TLSConfig, TcpStream,
 };
 
+#[cfg(feature = "openssl-futures")]
+use crate::AsyncTcpStream;
+
 use openssl::x509::X509;
 use std::io;
 
@@ -70,6 +73,16 @@ pub(crate) fn into_openssl_impl(
     config: TLSConfig<'_, '_, '_>,
 ) -> HandshakeResult {
     s.into_openssl(&openssl_connector(config)?, domain)
+}
+
+#[cfg(feature = "openssl-futures")]
+#[allow(dead_code)]
+pub(crate) async fn into_openssl_impl_async(
+    s: AsyncTcpStream,
+    domain: &str,
+    config: TLSConfig<'_, '_, '_>,
+) -> io::Result<AsyncTcpStream> {
+    s.into_openssl(&openssl_connector(config)?, domain).await
 }
 
 impl From<OpenSslStream> for TcpStream {

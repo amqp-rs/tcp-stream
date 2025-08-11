@@ -72,6 +72,11 @@ mod openssl_impl;
 #[cfg(feature = "openssl")]
 pub use openssl_impl::*;
 
+#[cfg(feature = "futures")]
+mod futures;
+#[cfg(feature = "futures")]
+pub use futures::*;
+
 /// Wrapper around plain or TLS TCP streams
 pub enum TcpStream {
     /// Wrapper around std::net::TcpStream

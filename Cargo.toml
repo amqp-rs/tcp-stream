@@ -16,6 +16,12 @@ name = "tcp_stream"
 
 [features]
 default                   = ["rustls-native-certs", "rustls--aws_lc_rs"]
+futures                   = ["dep:futures-io", "dep:reactor-trait"]
+
+native-tls-futures        = ["dep:async-native-tls", "futures", "native-tls"]
+openssl-futures           = ["dep:async-openssl", "futures", "openssl"]
+rustls-futures            = ["futures", "rustls-common", "rustls-connector/futures"]
+
 native-tls                = ["dep:native-tls", "dep:rustls-pemfile"]
 openssl                   = ["dep:openssl"]
 rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
@@ -31,6 +37,20 @@ rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--r
 [dependencies]
 cfg-if = "^1.0"
 
+[dependencies.async-native-tls]
+version = "^0.5"
+default-features = false
+features = ["runtime-async-std"] # this feature name is bad. means async traits from futures-io
+optional = true
+
+[dependencies.async-openssl]
+version = "^0.2"
+optional = true
+
+[dependencies.futures-io]
+version = "^0.3"
+optional = true
+
 [dependencies.native-tls]
 version  = "^0.2"
 optional = true
@@ -41,6 +61,11 @@ optional = true
 
 [dependencies.p12-keystore]
 version = "^0.2"
+optional = true
+
+[dependencies.reactor-trait]
+version = "^2.4"
+default-features = false
 optional = true
 
 [dependencies.rustls-pemfile]
