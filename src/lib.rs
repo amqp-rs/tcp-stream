@@ -324,25 +324,21 @@ fn connect_std_raw<A: ToSocketAddrs>(
     addr: A,
     timeout: Option<Duration>,
 ) -> io::Result<StdTcpStream> {
-    let mut addrs = addr.to_socket_addrs()?;
-    let mut err = None;
     if let Some(timeout) = timeout {
-        if let Some(addr) = addrs.next() {
+        let addrs = addr.to_socket_addrs()?;
+        let mut err = None;
+        for addr in addrs {
             match StdTcpStream::connect_timeout(&addr, timeout) {
                 Ok(stream) => return Ok(stream),
                 Err(error) => err = Some(error),
             }
         }
+        Err(err.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
+        }))
+    } else {
+        StdTcpStream::connect(addr)
     }
-    for addr in addrs {
-        match StdTcpStream::connect(addr) {
-            Ok(stream) => return Ok(stream),
-            Err(error) => err = Some(error),
-        }
-    }
-    Err(err.unwrap_or_else(|| {
-        io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
-    }))
 }
 
 #[cfg(feature = "rustls-common")]
