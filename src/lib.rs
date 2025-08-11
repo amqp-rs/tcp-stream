@@ -1,4 +1,5 @@
 #![deny(missing_docs)]
+#![allow(clippy::result_large_err)]
 
 //! # std::net::TCP stream on steroids
 //!
@@ -365,14 +366,10 @@ fn into_rustls_common(
     let connector = if let Some(identity) = config.identity {
         let (certs, key) = match identity {
             Identity::PKCS12 { der, password } => {
-                let pfx = p12_keystore::KeyStore::from_pkcs12(der, password)
-                    .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+                let pfx =
+                    p12_keystore::KeyStore::from_pkcs12(der, password).map_err(io::Error::other)?;
                 let Some((_, keychain)) = pfx.private_key_chain() else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "No private key in pkcs12 DER",
-                    )
-                    .into());
+                    return Err(io::Error::other("No private key in pkcs12 DER").into());
                 };
                 let certs = keychain
                     .chain()
@@ -397,7 +394,7 @@ fn into_rustls_common(
             }
         };
         c.connector_with_single_cert(certs, key)
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+            .map_err(io::Error::other)?
     } else {
         c.connector_with_no_client_auth()
     };
@@ -757,7 +754,7 @@ impl fmt::Display for HandshakeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             HandshakeError::WouldBlock(_) => f.write_str("WouldBlock hit during handshake"),
-            HandshakeError::Failure(err) => f.write_fmt(format_args!("IO error: {}", err)),
+            HandshakeError::Failure(err) => f.write_fmt(format_args!("IO error: {err}")),
         }
     }
 }
