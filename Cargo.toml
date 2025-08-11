@@ -1,6 +1,6 @@
 [package]
 name          = "tcp-stream"
-version       = "0.30.2"
+version       = "0.30.3"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2024"
 description   = "std::net::TcpStream on steroids"
@@ -36,7 +36,7 @@ version  = "^0.2"
 optional = true
 
 [dependencies.openssl]
-version  = "^0.10.46"
+version  = "^0.10.72"
 optional = true
 
 [dependencies.p12-keystore]
