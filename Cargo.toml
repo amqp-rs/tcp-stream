@@ -40,7 +40,7 @@ version  = "^0.10.72"
 optional = true
 
 [dependencies.p12-keystore]
-version = "^0.1"
+version = "^0.2"
 optional = true
 
 [dependencies.rustls-pemfile]
