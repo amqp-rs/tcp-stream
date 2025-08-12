@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "tcp-stream"
-version = "0.30.5"
+version = "0.30.6"
 dependencies = [
  "cfg-if",
  "native-tls",
