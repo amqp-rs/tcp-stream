@@ -985,9 +985,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-connector"
-version = "0.21.9"
+version = "0.21.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ef9b78f0e591d5edf9d009c41a02ae38c77ed7121c6a5833f0eb74b44f314e4"
+checksum = "10eb7ce243317e6b6a342ef6bff8c2e0d46d78120a9aeb2ee39693a569615c96"
 dependencies = [
  "futures-rustls",
  "log",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "tcp-stream"
-version = "0.30.4"
+version = "0.30.5"
 dependencies = [
  "cfg-if",
  "native-tls",
