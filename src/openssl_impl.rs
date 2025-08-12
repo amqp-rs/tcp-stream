@@ -20,9 +20,7 @@ pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
 /// An `ErrorStack` from openssl
 pub type OpenSslErrorStack = openssl::error::ErrorStack;
 
-fn openssl_connector(
-    config: TLSConfig<'_, '_, '_>,
-) -> io::Result<OpenSslConnector> {
+fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpenSslConnector> {
     let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
     if let Some(identity) = config.identity {
         let (cert, pkey, chain) = match identity {
