@@ -20,11 +20,9 @@ pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
 /// An `ErrorStack` from openssl
 pub type OpenSslErrorStack = openssl::error::ErrorStack;
 
-pub(crate) fn into_openssl_impl(
-    s: TcpStream,
-    domain: &str,
+fn openssl_connector(
     config: TLSConfig<'_, '_, '_>,
-) -> HandshakeResult {
+) -> io::Result<OpenSslConnector> {
     let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
     if let Some(identity) = config.identity {
         let (cert, pkey, chain) = match identity {
@@ -64,7 +62,15 @@ pub(crate) fn into_openssl_impl(
             builder.cert_store_mut().add_cert(cert)?;
         }
     }
-    s.into_openssl(&builder.build(), domain)
+    Ok(builder.build())
+}
+
+pub(crate) fn into_openssl_impl(
+    s: TcpStream,
+    domain: &str,
+    config: TLSConfig<'_, '_, '_>,
+) -> HandshakeResult {
+    s.into_openssl(&openssl_connector(config)?, domain)
 }
 
 impl From<OpenSslStream> for TcpStream {

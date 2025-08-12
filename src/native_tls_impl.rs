@@ -17,11 +17,7 @@ pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<TcpS
 /// A `HandshakeError` from native-tls
 pub type NativeTlsHandshakeError = native_tls::HandshakeError<TcpStream>;
 
-pub(crate) fn into_native_tls_impl(
-    s: TcpStream,
-    domain: &str,
-    config: TLSConfig<'_, '_, '_>,
-) -> HandshakeResult {
+fn native_tls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<NativeTlsConnector> {
     let mut builder = NativeTlsConnector::builder();
     if let Some(identity) = config.identity {
         let native_identity = match identity {
@@ -37,7 +33,15 @@ pub(crate) fn into_native_tls_impl(
                 .add_root_certificate(Certificate::from_der(&cert[..]).map_err(io::Error::other)?);
         }
     }
-    s.into_native_tls(&builder.build().map_err(io::Error::other)?, domain)
+    builder.build().map_err(io::Error::other)
+}
+
+pub(crate) fn into_native_tls_impl(
+    s: TcpStream,
+    domain: &str,
+    config: TLSConfig<'_, '_, '_>,
+) -> HandshakeResult {
+    s.into_native_tls(&native_tls_connector(config)?, domain)
 }
 
 impl From<NativeTlsStream> for TcpStream {
