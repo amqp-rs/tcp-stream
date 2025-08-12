@@ -65,6 +65,7 @@ fn openssl_connector(
     Ok(builder.build())
 }
 
+#[allow(dead_code)]
 pub(crate) fn into_openssl_impl(
     s: TcpStream,
     domain: &str,

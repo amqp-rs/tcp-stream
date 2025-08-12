@@ -36,6 +36,7 @@ fn native_tls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<NativeTlsCo
     builder.build().map_err(io::Error::other)
 }
 
+#[allow(dead_code)]
 pub(crate) fn into_native_tls_impl(
     s: TcpStream,
     domain: &str,

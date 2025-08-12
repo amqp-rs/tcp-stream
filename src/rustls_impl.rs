@@ -84,6 +84,7 @@ fn rustls_connector(
     Ok(connector)
 }
 
+#[allow(dead_code)]
 pub(crate) fn into_rustls_impl(
     s: TcpStream,
     c: RustlsConnectorConfig,
