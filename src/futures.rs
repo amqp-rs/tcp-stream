@@ -29,13 +29,13 @@ pub enum AsyncTcpStream {
 impl AsyncTcpStream {
     /// Wrapper around `reactor_trait::TcpReactor::connect`
     pub async fn connect<R: TcpReactor, A: AsyncToSocketAddrs>(
-        _reactor: R,
+        reactor: R,
         addr: A,
     ) -> io::Result<Self> {
         let addrs = addr.to_socket_addrs().await?;
         let mut err = None;
         for addr in addrs {
-            match R::connect(addr).await {
+            match reactor.connect(addr).await {
                 Ok(stream) => return Ok(Self::Plain(stream.into())),
                 Err(e) => err = Some(e),
             }

@@ -1144,9 +1144,9 @@ dependencies = [
 
 [[package]]
 name = "reactor-trait"
-version = "2.7.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d05d2072db44c9e2769ee9e700ec5e56330500b1753ab114d4eeeecacf81db"
+checksum = "2b15494b9b4ee2e5f1caff0e1fe4dc51620110c2db00b3327ba0befd286c64d9"
 dependencies = [
  "async-trait",
  "executor-trait",
@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "tcp-stream"
-version = "0.30.9"
+version = "0.31.0"
 dependencies = [
  "async-native-tls",
  "async-openssl",

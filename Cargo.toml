@@ -1,6 +1,6 @@
 [package]
 name          = "tcp-stream"
-version       = "0.30.9"
+version       = "0.31.0"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2024"
 description   = "std::net::TcpStream on steroids"
@@ -64,7 +64,7 @@ version = "^0.2"
 optional = true
 
 [dependencies.reactor-trait]
-version = "^2.7"
+version = "^3.0"
 default-features = false
 optional = true
 
