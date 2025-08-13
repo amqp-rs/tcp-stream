@@ -5,6 +5,7 @@ use futures_io::{AsyncRead, AsyncWrite};
 use reactor_trait::{AsyncIOHandle, AsyncToSocketAddrs, TcpReactor};
 use std::{
     io::{self, IoSlice, IoSliceMut},
+    ops::Deref,
     pin::{Pin, pin},
     task::{Context, Poll},
 };

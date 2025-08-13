@@ -1498,7 +1498,7 @@ dependencies = [
 
 [[package]]
 name = "tcp-stream"
-version = "0.31.1"
+version = "0.31.2"
 dependencies = [
  "async-native-tls",
  "async-openssl",
