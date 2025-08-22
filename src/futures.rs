@@ -36,7 +36,7 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     /// Wrapper around `reactor_trait::TcpReactor::connect`
     pub async fn connect<
         R: Reactor<TcpStream = S> + Sync + 'static,
-        A: AsyncToSocketAddrs + Send + 'static,
+        A: AsyncToSocketAddrs + Send,
     >(
         reactor: &R,
         addr: A,

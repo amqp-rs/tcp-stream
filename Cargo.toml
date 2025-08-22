@@ -1,6 +1,6 @@
 [package]
 name          = "tcp-stream"
-version       = "0.32.0"
+version       = "0.32.1"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2024"
 description   = "std::net::TcpStream on steroids"
@@ -52,7 +52,7 @@ version = "^0.2"
 optional = true
 
 [dependencies.async-rs]
-version = "^0.6"
+version = "^0.6.1"
 default-features = false
 optional = true
 
