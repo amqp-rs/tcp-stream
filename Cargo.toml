@@ -15,18 +15,22 @@ rust-version  = "1.85.0"
 name = "tcp_stream"
 
 [features]
-default                   = ["rustls-native-certs", "rustls--aws_lc_rs"]
-futures                   = ["dep:futures-io", "dep:reactor-trait"]
+default                   = ["rustls-native-certs", "rustls--aws_lc_rs", "tokio"]
+futures                   = ["dep:futures-io", "dep:async-rs"]
+
+async-global-executor     = ["futures", "async-rs?/async-global-executor", "async-rs?/async-io"]
+smol                      = ["futures", "async-rs?/smol"]
+tokio                     = ["futures", "async-rs?/tokio"]
 
 native-tls-futures        = ["dep:async-native-tls", "futures", "native-tls"]
 openssl-futures           = ["dep:async-openssl", "futures", "openssl"]
-rustls-futures            = ["futures", "rustls-common", "rustls-connector/futures"]
+rustls-futures            = ["futures", "rustls", "rustls-connector/futures"]
 
 native-tls                = ["dep:native-tls", "dep:rustls-pemfile"]
 openssl                   = ["dep:openssl"]
-rustls-webpki-roots-certs = ["rustls-common", "rustls-connector/webpki-roots-certs"]
-rustls-native-certs       = ["rustls-common", "rustls-connector/native-certs"]
-rustls-common             = ["dep:rustls-connector", "dep:rustls-pemfile", "dep:p12-keystore"]
+rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-roots-certs"]
+rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
+rustls                    = ["dep:rustls-connector", "dep:rustls-pemfile", "dep:p12-keystore"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 
 # rustls crypto providers. Choose at least one. Otherwise, runtime errors.
@@ -47,6 +51,11 @@ optional = true
 version = "^0.2"
 optional = true
 
+[dependencies.async-rs]
+version = "^0.6"
+default-features = false
+optional = true
+
 [dependencies.futures-io]
 version = "^0.3"
 optional = true
@@ -63,17 +72,12 @@ optional = true
 version = "^0.2"
 optional = true
 
-[dependencies.reactor-trait]
-version = "^3.0"
-default-features = false
-optional = true
-
 [dependencies.rustls-pemfile]
 version = "^2.0"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.21.11"
+version          = "^0.22"
 optional         = true
 default-features = false
 

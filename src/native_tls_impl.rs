@@ -1,9 +1,13 @@
 use crate::{
-    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, TLSConfig, TcpStream,
+    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, StdTcpStream, TLSConfig,
+    TcpStream,
 };
 
 #[cfg(feature = "native-tls-futures")]
-use crate::AsyncTcpStream;
+use {
+    crate::AsyncTcpStream,
+    futures_io::{AsyncRead, AsyncWrite},
+};
 
 use native_tls::Certificate;
 use std::io;
@@ -15,13 +19,17 @@ pub use native_tls::TlsConnector as NativeTlsConnector;
 pub use native_tls::TlsConnectorBuilder as NativeTlsConnectorBuilder;
 
 /// A `TcpStream` wrapped by native-tls
-pub type NativeTlsStream = native_tls::TlsStream<TcpStream>;
+pub type NativeTlsStream = native_tls::TlsStream<StdTcpStream>;
 
 /// A `MidHandshakeTlsStream` from native-tls
-pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<TcpStream>;
+pub type NativeTlsMidHandshakeTlsStream = native_tls::MidHandshakeTlsStream<StdTcpStream>;
 
 /// A `HandshakeError` from native-tls
-pub type NativeTlsHandshakeError = native_tls::HandshakeError<TcpStream>;
+pub type NativeTlsHandshakeError = native_tls::HandshakeError<StdTcpStream>;
+
+#[cfg(feature = "native-tls-futures")]
+/// An async `TcpStream` wrapped by native-tls
+pub type NativeTlsAsyncStream<S> = async_native_tls::TlsStream<S>;
 
 fn native_tls_connector_builder(
     config: TLSConfig<'_, '_, '_>,
@@ -61,33 +69,35 @@ pub(crate) fn into_native_tls_impl(
 
 #[cfg(feature = "native-tls-futures")]
 #[allow(dead_code)]
-pub(crate) async fn into_native_tls_impl_async(
-    s: AsyncTcpStream,
+pub(crate) async fn into_native_tls_impl_async<
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
+>(
+    s: AsyncTcpStream<S>,
     domain: &str,
     config: TLSConfig<'_, '_, '_>,
-) -> io::Result<AsyncTcpStream> {
+) -> io::Result<AsyncTcpStream<S>> {
     s.into_native_tls(native_tls_connector_builder(config)?, domain)
         .await
 }
 
 impl From<NativeTlsStream> for TcpStream {
     fn from(s: NativeTlsStream) -> Self {
-        TcpStream::NativeTls(Box::new(s))
+        Self::NativeTls(s)
     }
 }
 
 impl From<NativeTlsMidHandshakeTlsStream> for MidHandshakeTlsStream {
     fn from(mid: NativeTlsMidHandshakeTlsStream) -> Self {
-        MidHandshakeTlsStream::NativeTls(mid)
+        Self::NativeTls(mid)
     }
 }
 
 impl From<NativeTlsHandshakeError> for HandshakeError {
     fn from(error: NativeTlsHandshakeError) -> Self {
         match error {
-            native_tls::HandshakeError::WouldBlock(mid) => HandshakeError::WouldBlock(mid.into()),
+            native_tls::HandshakeError::WouldBlock(mid) => Self::WouldBlock(mid.into()),
             native_tls::HandshakeError::Failure(failure) => {
-                HandshakeError::Failure(io::Error::other(failure))
+                Self::Failure(io::Error::other(failure))
             }
         }
     }

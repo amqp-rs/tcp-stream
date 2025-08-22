@@ -1,30 +1,38 @@
 use crate::{
-    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, TLSConfig, TcpStream,
+    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, StdTcpStream, TLSConfig,
+    TcpStream,
 };
 
 #[cfg(feature = "openssl-futures")]
-use crate::AsyncTcpStream;
+use {
+    crate::AsyncTcpStream,
+    futures_io::{AsyncRead, AsyncWrite},
+};
 
 use openssl::x509::X509;
 use std::io;
 
 /// Reexport openssl's `TlsConnector`
-pub use openssl::ssl::{SslConnector as OpenSslConnector, SslMethod as OpenSslMethod};
+pub use openssl::ssl::{SslConnector as OpensslConnector, SslMethod as OpensslMethod};
 
 /// A `TcpStream` wrapped by openssl
-pub type OpenSslStream = openssl::ssl::SslStream<TcpStream>;
+pub type OpensslStream = openssl::ssl::SslStream<StdTcpStream>;
 
 /// A `MidHandshakeTlsStream` from openssl
-pub type OpenSslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<TcpStream>;
+pub type OpensslMidHandshakeTlsStream = openssl::ssl::MidHandshakeSslStream<StdTcpStream>;
 
 /// A `HandshakeError` from openssl
-pub type OpenSslHandshakeError = openssl::ssl::HandshakeError<TcpStream>;
+pub type OpensslHandshakeError = openssl::ssl::HandshakeError<StdTcpStream>;
 
 /// An `ErrorStack` from openssl
-pub type OpenSslErrorStack = openssl::error::ErrorStack;
+pub type OpensslErrorStack = openssl::error::ErrorStack;
 
-fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpenSslConnector> {
-    let mut builder = OpenSslConnector::builder(OpenSslMethod::tls())?;
+#[cfg(feature = "openssl-futures")]
+/// An async `TcpStream` wrapped by openssl
+pub type OpensslAsyncStream<S> = async_openssl::SslStream<S>;
+
+fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpensslConnector> {
+    let mut builder = OpensslConnector::builder(OpensslMethod::tls())?;
     if let Some(identity) = config.identity {
         let (cert, pkey, chain) = match identity {
             Identity::PKCS8 { pem, key } => {
@@ -77,40 +85,40 @@ pub(crate) fn into_openssl_impl(
 
 #[cfg(feature = "openssl-futures")]
 #[allow(dead_code)]
-pub(crate) async fn into_openssl_impl_async(
-    s: AsyncTcpStream,
+pub(crate) async fn into_openssl_impl_async<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+    s: AsyncTcpStream<S>,
     domain: &str,
     config: TLSConfig<'_, '_, '_>,
-) -> io::Result<AsyncTcpStream> {
+) -> io::Result<AsyncTcpStream<S>> {
     s.into_openssl(&openssl_connector(config)?, domain).await
 }
 
-impl From<OpenSslStream> for TcpStream {
-    fn from(s: OpenSslStream) -> Self {
-        TcpStream::OpenSsl(Box::new(s))
+impl From<OpensslStream> for TcpStream {
+    fn from(s: OpensslStream) -> Self {
+        Self::Openssl(s)
     }
 }
 
-impl From<OpenSslMidHandshakeTlsStream> for MidHandshakeTlsStream {
-    fn from(mid: OpenSslMidHandshakeTlsStream) -> Self {
-        MidHandshakeTlsStream::Openssl(mid)
+impl From<OpensslMidHandshakeTlsStream> for MidHandshakeTlsStream {
+    fn from(mid: OpensslMidHandshakeTlsStream) -> Self {
+        Self::Openssl(mid)
     }
 }
 
-impl From<OpenSslHandshakeError> for HandshakeError {
-    fn from(error: OpenSslHandshakeError) -> Self {
+impl From<OpensslHandshakeError> for HandshakeError {
+    fn from(error: OpensslHandshakeError) -> Self {
         match error {
-            openssl::ssl::HandshakeError::WouldBlock(mid) => HandshakeError::WouldBlock(mid.into()),
+            openssl::ssl::HandshakeError::WouldBlock(mid) => Self::WouldBlock(mid.into()),
             openssl::ssl::HandshakeError::Failure(failure) => {
-                HandshakeError::Failure(io::Error::other(failure.into_error()))
+                Self::Failure(io::Error::other(failure.into_error()))
             }
             openssl::ssl::HandshakeError::SetupFailure(failure) => failure.into(),
         }
     }
 }
 
-impl From<OpenSslErrorStack> for HandshakeError {
-    fn from(error: OpenSslErrorStack) -> Self {
+impl From<OpensslErrorStack> for HandshakeError {
+    fn from(error: OpensslErrorStack) -> Self {
         Self::Failure(error.into())
     }
 }

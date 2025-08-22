@@ -1,49 +1,47 @@
 use crate::TLSConfig;
 
+use async_rs::traits::*;
 use cfg_if::cfg_if;
 use futures_io::{AsyncRead, AsyncWrite};
-use reactor_trait::{AsyncIOHandle, AsyncToSocketAddrs, TcpReactor};
 use std::{
     io::{self, IoSlice, IoSliceMut},
-    ops::Deref,
-    pin::{Pin, pin},
+    pin::Pin,
     task::{Context, Poll},
 };
 
 #[cfg(feature = "native-tls-futures")]
-use crate::NativeTlsConnectorBuilder;
+use crate::{NativeTlsAsyncStream, NativeTlsConnectorBuilder};
 #[cfg(feature = "openssl-futures")]
-use crate::OpenSslConnector;
+use crate::{OpensslAsyncStream, OpensslConnector};
 #[cfg(feature = "rustls-futures")]
-use crate::{RustlsConnector, RustlsConnectorConfig};
-
-type AsyncStream = Pin<Box<dyn AsyncIOHandle + Send>>;
+use crate::{RustlsAsyncStream, RustlsConnector, RustlsConnectorConfig};
 
 /// Wrapper around plain or TLS async TCP streams
-pub enum AsyncTcpStream {
+#[non_exhaustive]
+pub enum AsyncTcpStream<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Wrapper around plain async TCP stream
-    Plain(AsyncStream),
-    /// Wrapper around a TLS async TCP stream
-    TLS(AsyncStream),
+    Plain(S),
+    #[cfg(feature = "native-tls-futures")]
+    /// Wrapper around a TLS async stream hanled by native-tls
+    NativeTls(NativeTlsAsyncStream<S>),
+    #[cfg(feature = "openssl-futures")]
+    /// Wrapper around a TLS async stream hanled by openssl
+    Openssl(OpensslAsyncStream<S>),
+    #[cfg(feature = "rustls-futures")]
+    /// Wrapper around a TLS async stream hanled by rustls
+    Rustls(RustlsAsyncStream<S>),
 }
 
-impl AsyncTcpStream {
+impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     /// Wrapper around `reactor_trait::TcpReactor::connect`
-    pub async fn connect<R: Deref, A: AsyncToSocketAddrs>(reactor: R, addr: A) -> io::Result<Self>
-    where
-        R::Target: TcpReactor,
-    {
-        let addrs = addr.to_socket_addrs().await?;
-        let mut err = None;
-        for addr in addrs {
-            match reactor.connect(addr).await {
-                Ok(stream) => return Ok(Self::Plain(stream.into())),
-                Err(e) => err = Some(e),
-            }
-        }
-        Err(err.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
-        }))
+    pub async fn connect<
+        R: Reactor<TcpStream = S> + Sync + 'static,
+        A: AsyncToSocketAddrs + Send + 'static,
+    >(
+        reactor: &R,
+        addr: A,
+    ) -> io::Result<Self> {
+        Ok(Self::Plain(reactor.tcp_connect(addr).await?))
     }
 
     /// Enable TLS
@@ -58,19 +56,19 @@ impl AsyncTcpStream {
         connector: NativeTlsConnectorBuilder,
         domain: &str,
     ) -> io::Result<Self> {
-        Ok(Self::TLS(Box::pin(
+        Ok(Self::NativeTls(
             async_native_tls::TlsConnector::from(connector)
                 .connect(domain, self.into_plain()?)
                 .await
                 .map_err(io::Error::other)?,
-        )))
+        ))
     }
 
     #[cfg(feature = "openssl-futures")]
     /// Enable TLS using openssl
     pub async fn into_openssl(
         self,
-        connector: &OpenSslConnector,
+        connector: &OpensslConnector,
         domain: &str,
     ) -> io::Result<Self> {
         let mut stream = async_openssl::SslStream::new(
@@ -81,20 +79,20 @@ impl AsyncTcpStream {
             .connect()
             .await
             .map_err(io::Error::other)?;
-        Ok(Self::TLS(Box::pin(stream)))
+        Ok(Self::Openssl(stream))
     }
 
     #[cfg(feature = "rustls-futures")]
     /// Enable TLS using rustls
     pub async fn into_rustls(self, connector: &RustlsConnector, domain: &str) -> io::Result<Self> {
-        Ok(Self::TLS(Box::pin(
+        Ok(Self::Rustls(
             connector.connect_async(domain, self.into_plain()?).await?,
-        )))
+        ))
     }
 
     #[allow(irrefutable_let_patterns, dead_code)]
-    fn into_plain(self) -> io::Result<AsyncStream> {
-        if let AsyncTcpStream::Plain(plain) = self {
+    fn into_plain(self) -> io::Result<S> {
+        if let Self::Plain(plain) = self {
             Ok(plain)
         } else {
             Err(io::Error::new(
@@ -105,44 +103,50 @@ impl AsyncTcpStream {
     }
 }
 
-cfg_if! {
-    if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
-        async fn into_tls_impl(s: AsyncTcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+    s: AsyncTcpStream<S>,
+    domain: &str,
+    config: TLSConfig<'_, '_, '_>,
+) -> io::Result<AsyncTcpStream<S>> {
+    cfg_if! {
+        if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config).await
-        }
-    } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-webpki-roots-certs"))] {
-        async fn into_tls_impl(s: AsyncTcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+        } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-webpki-roots-certs"))] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config).await
-        }
-    } else if #[cfg(feature = "rustls-futures")] {
-        async fn into_tls_impl(s: AsyncTcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+        } else if #[cfg(feature = "rustls-futures")] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::default(), domain, config).await
-        }
-    } else if #[cfg(feature = "openssl-futures")] {
-        async fn into_tls_impl(s: AsyncTcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+        } else if #[cfg(feature = "openssl-futures")] {
             crate::into_openssl_impl_async(s, domain, config).await
-        }
-    } else if #[cfg(feature = "native-tls-futures")] {
-        async fn into_tls_impl(s: AsyncTcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+        } else if #[cfg(feature = "native-tls-futures")] {
             crate::into_native_tls_impl_async(s, domain, config).await
-        }
-    } else {
-        async fn into_tls_impl(s: AsyncTcpStream, _domain: &str, _: TLSConfig<'_, '_, '_>) -> io::Result<AsyncTcpStream> {
+        } else {
+            let _ = (domain, config);
             Ok(AsyncTcpStream::Plain(s.into_plain()?))
         }
     }
 }
 
-impl AsyncRead for AsyncTcpStream {
+macro_rules! fwd_impl {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        match $self.get_mut() {
+            Self::Plain(plain) => Pin::new(plain).$method($($args),*),
+            #[cfg(feature = "native-tls-futures")]
+            Self::NativeTls(tls) => Pin::new(tls).$method($($args),*),
+            #[cfg(feature = "openssl-futures")]
+            Self::Openssl(tls) => Pin::new(tls).$method($($args),*),
+            #[cfg(feature = "rustls-futures")]
+            Self::Rustls(tls) => Pin::new(tls).$method($($args),*),
+        }
+    };
+}
+
+impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncRead for AsyncTcpStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_read(cx, buf),
-            Self::TLS(tls) => pin!(tls).poll_read(cx, buf),
-        }
+        fwd_impl!(self, poll_read, cx, buf)
     }
 
     fn poll_read_vectored(
@@ -150,23 +154,17 @@ impl AsyncRead for AsyncTcpStream {
         cx: &mut Context<'_>,
         bufs: &mut [IoSliceMut<'_>],
     ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_read_vectored(cx, bufs),
-            Self::TLS(tls) => pin!(tls).poll_read_vectored(cx, bufs),
-        }
+        fwd_impl!(self, poll_read_vectored, cx, bufs)
     }
 }
 
-impl AsyncWrite for AsyncTcpStream {
+impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncWrite for AsyncTcpStream<S> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_write(cx, buf),
-            Self::TLS(tls) => pin!(tls).poll_write(cx, buf),
-        }
+        fwd_impl!(self, poll_write, cx, buf)
     }
 
     fn poll_write_vectored(
@@ -174,23 +172,14 @@ impl AsyncWrite for AsyncTcpStream {
         cx: &mut Context<'_>,
         bufs: &[IoSlice<'_>],
     ) -> Poll<io::Result<usize>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_write_vectored(cx, bufs),
-            Self::TLS(tls) => pin!(tls).poll_write_vectored(cx, bufs),
-        }
+        fwd_impl!(self, poll_write_vectored, cx, bufs)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_flush(cx),
-            Self::TLS(tls) => pin!(tls).poll_flush(cx),
-        }
+        fwd_impl!(self, poll_flush, cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        match self.get_mut() {
-            Self::Plain(plain) => pin!(plain).poll_close(cx),
-            Self::TLS(tls) => pin!(tls).poll_close(cx),
-        }
+        fwd_impl!(self, poll_close, cx)
     }
 }

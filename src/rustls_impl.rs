@@ -1,9 +1,13 @@
 use crate::{
-    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, TLSConfig, TcpStream,
+    HandshakeError, HandshakeResult, Identity, MidHandshakeTlsStream, StdTcpStream, TLSConfig,
+    TcpStream,
 };
 
 #[cfg(feature = "rustls-futures")]
-use crate::AsyncTcpStream;
+use {
+    crate::AsyncTcpStream,
+    futures_io::{AsyncRead, AsyncWrite},
+};
 
 use rustls_connector::rustls_pki_types::{
     CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject,
@@ -14,13 +18,17 @@ use std::io;
 pub use rustls_connector::{RustlsConnector, RustlsConnectorConfig};
 
 /// A `TcpStream` wrapped by rustls
-pub type RustlsStream = rustls_connector::TlsStream<TcpStream>;
+pub type RustlsStream = rustls_connector::TlsStream<StdTcpStream>;
 
 /// A `MidHandshakeTlsStream` from rustls-connector
-pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<TcpStream>;
+pub type RustlsMidHandshakeTlsStream = rustls_connector::MidHandshakeTlsStream<StdTcpStream>;
 
 /// A `HandshakeError` from rustls-connector
-pub type RustlsHandshakeError = rustls_connector::HandshakeError<TcpStream>;
+pub type RustlsHandshakeError = rustls_connector::HandshakeError<StdTcpStream>;
+
+#[cfg(feature = "rustls-futures")]
+/// An async `TcpStream` wrapped by rustls
+pub type RustlsAsyncStream<S> = rustls_connector::AsyncTlsStream<S>;
 
 fn update_rustls_config(
     c: &mut RustlsConnectorConfig,
@@ -99,34 +107,32 @@ pub(crate) fn into_rustls_impl(
 
 #[cfg(feature = "rustls-futures")]
 #[allow(dead_code)]
-pub(crate) async fn into_rustls_impl_async(
-    s: AsyncTcpStream,
+pub(crate) async fn into_rustls_impl_async<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+    s: AsyncTcpStream<S>,
     c: RustlsConnectorConfig,
     domain: &str,
     config: TLSConfig<'_, '_, '_>,
-) -> io::Result<AsyncTcpStream> {
+) -> io::Result<AsyncTcpStream<S>> {
     s.into_rustls(&rustls_connector(c, config)?, domain).await
 }
 
 impl From<RustlsStream> for TcpStream {
     fn from(s: RustlsStream) -> Self {
-        TcpStream::Rustls(Box::new(s))
+        Self::Rustls(s)
     }
 }
 
 impl From<RustlsMidHandshakeTlsStream> for MidHandshakeTlsStream {
     fn from(mid: RustlsMidHandshakeTlsStream) -> Self {
-        MidHandshakeTlsStream::Rustls(mid)
+        Self::Rustls(mid)
     }
 }
 
 impl From<RustlsHandshakeError> for HandshakeError {
     fn from(error: RustlsHandshakeError) -> Self {
         match error {
-            rustls_connector::HandshakeError::WouldBlock(mid) => {
-                HandshakeError::WouldBlock((*mid).into())
-            }
-            rustls_connector::HandshakeError::Failure(failure) => HandshakeError::Failure(failure),
+            rustls_connector::HandshakeError::WouldBlock(mid) => Self::WouldBlock(mid.into()),
+            rustls_connector::HandshakeError::Failure(failure) => Self::Failure(failure),
         }
     }
 }

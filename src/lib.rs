@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-#![allow(clippy::result_large_err)]
+#![allow(clippy::large_enum_variant, clippy::result_large_err)]
 
 //! # std::net::TCP stream on steroids
 //!
@@ -17,7 +17,7 @@
 //! let mut stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
 //! stream.set_nonblocking(true).unwrap();
 //!
-//! while !stream.is_connected() {
+//! loop {
 //!     if stream.try_connect().unwrap() {
 //!         break;
 //!     }
@@ -57,9 +57,9 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature = "rustls-common")]
+#[cfg(feature = "rustls")]
 mod rustls_impl;
-#[cfg(feature = "rustls-common")]
+#[cfg(feature = "rustls")]
 pub use rustls_impl::*;
 
 #[cfg(feature = "native-tls")]
@@ -78,18 +78,19 @@ mod futures;
 pub use futures::*;
 
 /// Wrapper around plain or TLS TCP streams
+#[non_exhaustive]
 pub enum TcpStream {
     /// Wrapper around std::net::TcpStream
-    Plain(StdTcpStream, bool),
+    Plain(StdTcpStream),
     #[cfg(feature = "native-tls")]
     /// Wrapper around a TLS stream hanled by native-tls
-    NativeTls(Box<NativeTlsStream>),
+    NativeTls(NativeTlsStream),
     #[cfg(feature = "openssl")]
     /// Wrapper around a TLS stream hanled by openssl
-    OpenSsl(Box<OpenSslStream>),
-    #[cfg(feature = "rustls-common")]
+    Openssl(OpensslStream),
+    #[cfg(feature = "rustls")]
     /// Wrapper around a TLS stream hanled by rustls
-    Rustls(Box<RustlsStream>),
+    Rustls(RustlsStream),
 }
 
 /// Holds extra TLS configuration
@@ -193,51 +194,22 @@ impl TcpStream {
         Self::try_from(stream)
     }
 
-    /// Check whether the stream is connected or not
-    #[must_use]
-    #[allow(irrefutable_let_patterns)]
-    pub fn is_connected(&self) -> bool {
-        if let Self::Plain(_, connected) = self {
-            *connected
-        } else {
-            true
-        }
-    }
-
     /// Attempt reading from underlying stream, returning Ok(()) if the stream is readable
     pub fn is_readable(&self) -> io::Result<()> {
         self.deref().read(&mut []).map(|_| ())
     }
 
     /// Attempt writing to underlying stream, returning Ok(()) if the stream is writable
-    pub fn is_writable(&self) -> io::Result<()> {
-        self.deref().write(&[]).map(|_| ())
+    pub fn is_writable(&mut self) -> io::Result<()> {
+        is_writable(self.deref_mut())
     }
 
     /// Retry the connection. Returns:
     /// - Ok(true) if connected
     /// - Ok(false) if connecting
     /// - Err(_) if an error is encountered
-    #[allow(irrefutable_let_patterns)]
     pub fn try_connect(&mut self) -> io::Result<bool> {
-        if self.is_connected() {
-            return Ok(true);
-        }
-        match self.is_writable() {
-            Ok(()) => {
-                if let Self::Plain(_, connected) = self {
-                    *connected = true;
-                }
-                Ok(true)
-            }
-            Err(err)
-                if [io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected]
-                    .contains(&err.kind()) =>
-            {
-                Ok(false)
-            }
-            Err(err) => Err(err),
-        }
+        try_connect(self)
     }
 
     /// Enable TLS
@@ -263,13 +235,13 @@ impl TcpStream {
     /// Enable TLS using openssl
     pub fn into_openssl(
         self,
-        connector: &OpenSslConnector,
+        connector: &OpensslConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
-    #[cfg(feature = "rustls-common")]
+    #[cfg(feature = "rustls")]
     /// Enable TLS using rustls
     pub fn into_rustls(
         self,
@@ -280,9 +252,9 @@ impl TcpStream {
     }
 
     #[allow(irrefutable_let_patterns)]
-    fn into_plain(self) -> Result<TcpStream, io::Error> {
-        if let TcpStream::Plain(plain, connected) = self {
-            Ok(TcpStream::Plain(plain, connected))
+    fn into_plain(self) -> Result<StdTcpStream, io::Error> {
+        if let Self::Plain(plain) = self {
+            Ok(plain)
         } else {
             Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
@@ -319,30 +291,37 @@ fn connect_std_raw<A: ToSocketAddrs>(
     }
 }
 
-cfg_if! {
-    if #[cfg(feature = "rustls-native-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+fn try_connect(stream: &mut StdTcpStream) -> io::Result<bool> {
+    match is_writable(stream) {
+        Ok(()) => Ok(true),
+        Err(err)
+            if [io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected].contains(&err.kind()) =>
+        {
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn is_writable(stream: &mut StdTcpStream) -> io::Result<()> {
+    stream.write(&[]).map(|_| ())
+}
+
+fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+    cfg_if! {
+        if #[cfg(feature = "rustls-native-certs")] {
             into_rustls_impl(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
-        }
-    } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
             into_rustls_impl(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)
-        }
-    } else if #[cfg(feature = "rustls-common")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        } else if #[cfg(feature = "rustls")] {
             into_rustls_impl(s, RustlsConnectorConfig::default(), domain, config)
-        }
-    } else if #[cfg(feature = "openssl")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        } else if #[cfg(feature = "openssl")] {
             into_openssl_impl(s, domain, config)
-        }
-    } else if #[cfg(feature = "native-tls")] {
-        fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
+        } else if #[cfg(feature = "native-tls")] {
             into_native_tls_impl(s, domain, config)
-        }
-    } else {
-        fn into_tls_impl(s: TcpStream, _domain: &str, _: TLSConfig<'_, '_, '_>) -> HandshakeResult {
-            Ok(s.into_plain()?)
+        } else {
+            let _ = (domain, config);
+            Ok(TcpStream::Plain(s.into_plain()?))
         }
     }
 }
@@ -351,7 +330,7 @@ impl TryFrom<StdTcpStream> for TcpStream {
     type Error = io::Error;
 
     fn try_from(s: StdTcpStream) -> io::Result<Self> {
-        let mut this = TcpStream::Plain(s, false);
+        let mut this = Self::Plain(s);
         this.try_connect()?;
         Ok(this)
     }
@@ -362,13 +341,13 @@ impl Deref for TcpStream {
 
     fn deref(&self) -> &Self::Target {
         match self {
-            TcpStream::Plain(plain, _) => plain,
+            Self::Plain(plain) => plain,
             #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(tls) => tls.get_ref(),
+            Self::NativeTls(tls) => tls.get_ref(),
             #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(tls) => tls.get_ref(),
-            #[cfg(feature = "rustls-common")]
-            TcpStream::Rustls(tls) => tls.get_ref(),
+            Self::Openssl(tls) => tls.get_ref(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(tls) => tls.get_ref(),
         }
     }
 }
@@ -376,13 +355,13 @@ impl Deref for TcpStream {
 impl DerefMut for TcpStream {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self {
-            TcpStream::Plain(plain, _) => plain,
+            Self::Plain(plain) => plain,
             #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(tls) => tls.get_mut(),
+            Self::NativeTls(tls) => tls.get_mut(),
             #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(tls) => tls.get_mut(),
-            #[cfg(feature = "rustls-common")]
-            TcpStream::Rustls(tls) => tls.get_mut(),
+            Self::Openssl(tls) => tls.get_mut(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(tls) => tls.get_mut(),
         }
     }
 }
@@ -390,13 +369,13 @@ impl DerefMut for TcpStream {
 macro_rules! fwd_impl {
     ($self:ident, $method:ident, $($args:expr),*) => {
         match $self {
-            TcpStream::Plain(plain, _) => plain.$method($($args),*),
+            Self::Plain(plain) => plain.$method($($args),*),
             #[cfg(feature = "native-tls")]
-            TcpStream::NativeTls(tls) => tls.$method($($args),*),
+            Self::NativeTls(tls) => tls.$method($($args),*),
             #[cfg(feature = "openssl")]
-            TcpStream::OpenSsl(tls) => tls.$method($($args),*),
-            #[cfg(feature = "rustls-common")]
-            TcpStream::Rustls(tls) => tls.$method($($args),*),
+            Self::Openssl(tls) => tls.$method($($args),*),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(tls) => tls.$method($($args),*),
         }
     };
 }
@@ -454,7 +433,6 @@ impl fmt::Debug for TcpStream {
 }
 
 /// A TLS stream which has been interrupted during the handshake
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum MidHandshakeTlsStream {
     /// Not a TLS stream
@@ -464,8 +442,8 @@ pub enum MidHandshakeTlsStream {
     NativeTls(NativeTlsMidHandshakeTlsStream),
     #[cfg(feature = "openssl")]
     /// An openssl MidHandshakeTlsStream
-    Openssl(OpenSslMidHandshakeTlsStream),
-    #[cfg(feature = "rustls-common")]
+    Openssl(OpensslMidHandshakeTlsStream),
+    #[cfg(feature = "rustls")]
     /// A rustls-connector MidHandshakeTlsStream
     Rustls(RustlsMidHandshakeTlsStream),
 }
@@ -473,69 +451,53 @@ pub enum MidHandshakeTlsStream {
 impl MidHandshakeTlsStream {
     /// Get a reference to the inner stream
     #[must_use]
-    pub fn get_ref(&self) -> &TcpStream {
+    pub fn get_ref(&self) -> &StdTcpStream {
         match self {
-            MidHandshakeTlsStream::Plain(mid) => mid,
+            Self::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
-            MidHandshakeTlsStream::NativeTls(mid) => mid.get_ref(),
+            Self::NativeTls(mid) => mid.get_ref(),
             #[cfg(feature = "openssl")]
-            MidHandshakeTlsStream::Openssl(mid) => mid.get_ref(),
-            #[cfg(feature = "rustls-common")]
-            MidHandshakeTlsStream::Rustls(mid) => mid.get_ref(),
+            Self::Openssl(mid) => mid.get_ref(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(mid) => mid.get_ref(),
         }
     }
 
     /// Get a mutable reference to the inner stream
     #[must_use]
-    pub fn get_mut(&mut self) -> &mut TcpStream {
+    pub fn get_mut(&mut self) -> &mut StdTcpStream {
         match self {
-            MidHandshakeTlsStream::Plain(mid) => mid,
+            Self::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
-            MidHandshakeTlsStream::NativeTls(mid) => mid.get_mut(),
+            Self::NativeTls(mid) => mid.get_mut(),
             #[cfg(feature = "openssl")]
-            MidHandshakeTlsStream::Openssl(mid) => mid.get_mut(),
-            #[cfg(feature = "rustls-common")]
-            MidHandshakeTlsStream::Rustls(mid) => mid.get_mut(),
+            Self::Openssl(mid) => mid.get_mut(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(mid) => mid.get_mut(),
         }
     }
 
     /// Retry the handshake
-    pub fn handshake(self) -> HandshakeResult {
+    pub fn handshake(mut self) -> HandshakeResult {
+        if !try_connect(self.get_mut())? {
+            return Err(HandshakeError::WouldBlock(self));
+        }
+
         Ok(match self {
-            MidHandshakeTlsStream::Plain(mut mid) => {
-                if !mid.try_connect()? {
-                    return Err(HandshakeError::WouldBlock(mid.into()));
-                }
-                mid
-            }
+            Self::Plain(mid) => mid,
             #[cfg(feature = "native-tls")]
-            MidHandshakeTlsStream::NativeTls(mut mid) => {
-                if !mid.get_mut().try_connect()? {
-                    return Err(HandshakeError::WouldBlock(mid.into()));
-                }
-                mid.handshake()?.into()
-            }
+            Self::NativeTls(mid) => mid.handshake()?.into(),
             #[cfg(feature = "openssl")]
-            MidHandshakeTlsStream::Openssl(mut mid) => {
-                if !mid.get_mut().try_connect()? {
-                    return Err(HandshakeError::WouldBlock(mid.into()));
-                }
-                mid.handshake()?.into()
-            }
-            #[cfg(feature = "rustls-common")]
-            MidHandshakeTlsStream::Rustls(mut mid) => {
-                if !mid.get_mut().try_connect()? {
-                    return Err(HandshakeError::WouldBlock(mid.into()));
-                }
-                mid.handshake()?.into()
-            }
+            Self::Openssl(mid) => mid.handshake()?.into(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(mid) => mid.handshake()?.into(),
         })
     }
 }
 
 impl From<TcpStream> for MidHandshakeTlsStream {
     fn from(mid: TcpStream) -> Self {
-        MidHandshakeTlsStream::Plain(mid)
+        Self::Plain(mid)
     }
 }
 
@@ -546,7 +508,6 @@ impl fmt::Display for MidHandshakeTlsStream {
 }
 
 /// An error returned while performing the handshake
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum HandshakeError {
     /// We hit WouldBlock during handshake
@@ -568,8 +529,8 @@ impl HandshakeError {
 impl fmt::Display for HandshakeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            HandshakeError::WouldBlock(_) => f.write_str("WouldBlock hit during handshake"),
-            HandshakeError::Failure(err) => f.write_fmt(format_args!("IO error: {err}")),
+            Self::WouldBlock(_) => f.write_str("WouldBlock hit during handshake"),
+            Self::Failure(err) => f.write_fmt(format_args!("IO error: {err}")),
         }
     }
 }
@@ -577,7 +538,7 @@ impl fmt::Display for HandshakeError {
 impl Error for HandshakeError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            HandshakeError::Failure(err) => Some(err),
+            Self::Failure(err) => Some(err),
             _ => None,
         }
     }
@@ -585,7 +546,7 @@ impl Error for HandshakeError {
 
 impl From<io::Error> for HandshakeError {
     fn from(err: io::Error) -> Self {
-        HandshakeError::Failure(err)
+        Self::Failure(err)
     }
 }
 
