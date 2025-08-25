@@ -1,6 +1,6 @@
 [package]
 name          = "tcp-stream"
-version       = "0.33.0"
+version       = "0.33.1"
 authors       = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 edition       = "2024"
 description   = "std::net::TcpStream on steroids"
