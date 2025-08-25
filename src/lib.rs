@@ -36,7 +36,13 @@
 //!         panic!("error: {:?}", err);
 //!     }
 //! }
-//! stream.flush().unwrap();
+//!
+//! while let Err(err) = stream.flush() {
+//!     if err.kind() != io::ErrorKind::WouldBlock {
+//!         panic!("error: {:?}", err);
+//!     }
+//! }
+//!
 //! let mut res = vec![];
 //! while let Err(err) = stream.read_to_end(&mut res) {
 //!     if err.kind() != io::ErrorKind::WouldBlock {
