@@ -26,11 +26,11 @@ native-tls-futures        = ["dep:async-native-tls", "futures", "native-tls"]
 openssl-futures           = ["dep:async-openssl", "futures", "openssl"]
 rustls-futures            = ["futures", "rustls", "rustls-connector/futures"]
 
-native-tls                = ["dep:native-tls", "dep:rustls-pemfile"]
+native-tls                = ["dep:native-tls"]
 openssl                   = ["dep:openssl"]
 rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
-rustls                    = ["dep:rustls-connector", "dep:rustls-pemfile", "dep:p12-keystore"]
+rustls                    = ["dep:rustls-connector", "dep:p12-keystore"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 
 # rustls crypto providers. Choose at least one. Otherwise, runtime errors.
@@ -70,10 +70,6 @@ optional = true
 
 [dependencies.p12-keystore]
 version = "^0.2"
-optional = true
-
-[dependencies.rustls-pemfile]
-version = "^2.0"
 optional = true
 
 [dependencies.rustls-connector]
