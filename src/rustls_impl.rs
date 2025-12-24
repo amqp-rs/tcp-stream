@@ -10,7 +10,7 @@ use {
 };
 
 use rustls_connector::rustls_pki_types::{
-    pem::PemObject, CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer,
+    CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject,
 };
 use std::io;
 
