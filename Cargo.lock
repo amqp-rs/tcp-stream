@@ -1854,6 +1854,7 @@ dependencies = [
  "openssl",
  "p12-keystore",
  "rustls-connector",
+ "rustls-pki-types",
 ]
 
 [[package]]

@@ -3,7 +3,7 @@ use crate::{
     TcpStream,
 };
 
-use rustls_connector::rustls_pki_types::{CertificateDer, pem::PemObject};
+use rustls_pki_types::{CertificateDer, pem::PemObject};
 
 #[cfg(feature = "native-tls-futures")]
 use {

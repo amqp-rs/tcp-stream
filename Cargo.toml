@@ -26,7 +26,7 @@ native-tls-futures        = ["dep:async-native-tls", "futures", "native-tls"]
 openssl-futures           = ["dep:async-openssl", "futures", "openssl"]
 rustls-futures            = ["futures", "rustls", "rustls-connector/futures"]
 
-native-tls                = ["dep:native-tls"]
+native-tls                = ["dep:native-tls", "dep:rustls-pki-types"]
 openssl                   = ["dep:openssl"]
 rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-roots-certs"]
 rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
@@ -76,6 +76,12 @@ optional = true
 version          = "^0.22"
 optional         = true
 default-features = false
+
+[dependencies.rustls-pki-types]
+version          = "^1.4"
+optional         = true
+default-features = false
+features         = ["std"]
 
 [package.metadata.docs.rs]
 all-features = true
