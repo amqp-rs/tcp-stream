@@ -3,6 +3,8 @@ use crate::{
     TcpStream,
 };
 
+use rustls_connector::rustls_pki_types::{CertificateDer, pem::PemObject};
+
 #[cfg(feature = "native-tls-futures")]
 use {
     crate::AsyncTcpStream,
@@ -44,7 +46,10 @@ fn native_tls_connector_builder(
     }
     if let Some(cert_chain) = config.cert_chain {
         let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
-        for cert in rustls_pemfile::certs(&mut cert_chain).collect::<Result<Vec<_>, _>>()? {
+        for cert in CertificateDer::pem_reader_iter(&mut cert_chain)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
+        {
             builder
                 .add_root_certificate(Certificate::from_der(&cert[..]).map_err(io::Error::other)?);
         }

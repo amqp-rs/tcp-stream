@@ -36,7 +36,7 @@ fn update_rustls_config(
 ) -> io::Result<()> {
     if let Some(cert_chain) = config.cert_chain {
         let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
-        let certs = rustls_pemfile::certs(&mut cert_chain)
+        let certs = CertificateDer::pem_reader_iter(&mut cert_chain)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
         c.add_parsable_certificates(certs);
@@ -66,7 +66,7 @@ fn rustls_identity(
         }
         Identity::PKCS8 { pem, key } => {
             let mut cert_reader = std::io::BufReader::new(pem);
-            let certs = rustls_pemfile::certs(&mut cert_reader)
+            let certs = CertificateDer::pem_reader_iter(&mut cert_reader)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
             (
