@@ -109,7 +109,7 @@ pub struct TLSConfig<'data, 'key, 'chain> {
 }
 
 /// Holds extra TLS configuration
-#[derive(Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct OwnedTLSConfig {
     /// Use for client certificate authentication
     pub identity: Option<OwnedIdentity>,
@@ -152,7 +152,7 @@ pub enum Identity<'data, 'key> {
 /// Holds one of:
 /// - PKCS#12 DER-encoded identity and decryption password
 /// - PKCS#8 PEM-encoded certificate and key (without decryption password)
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OwnedIdentity {
     /// PKCS#12 DER-encoded identity with decryption password
     PKCS12 {
