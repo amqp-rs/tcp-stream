@@ -42,9 +42,9 @@ rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--r
 cfg-if = "^1.0"
 
 [dependencies.async-native-tls]
-version = "^0.5"
+version = "^0.6"
 default-features = false
-features = ["runtime-async-std"] # this feature name is bad. means async traits from futures-io
+features = ["runtime-smol"] # this feature name is bad. means async traits from futures-io
 optional = true
 
 [dependencies.async-openssl]
