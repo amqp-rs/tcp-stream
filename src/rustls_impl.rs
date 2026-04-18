@@ -87,10 +87,9 @@ fn rustls_connector(
 
     let connector = if let Some(identity) = config.identity {
         let (certs, key) = rustls_identity(identity)?;
-        c.connector_with_single_cert(certs, key)
-            .map_err(io::Error::other)?
+        c.connector_with_single_cert(certs, key)?
     } else {
-        c.connector_with_no_client_auth()
+        c.connector_with_no_client_auth()?
     };
     Ok(connector)
 }

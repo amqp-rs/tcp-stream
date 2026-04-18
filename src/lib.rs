@@ -315,7 +315,9 @@ fn is_writable(stream: &mut StdTcpStream) -> io::Result<()> {
 
 fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
     cfg_if! {
-        if #[cfg(feature = "rustls-native-certs")] {
+        if #[cfg(feature = "rustls-platform-verifier")] {
+            into_rustls_impl(s, RustlsConnectorConfig::new_with_platform_verifier(), domain, config)
+        } else if #[cfg(feature = "rustls-native-certs")] {
             into_rustls_impl(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
         } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
             into_rustls_impl(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)

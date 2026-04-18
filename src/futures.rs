@@ -106,7 +106,9 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
     config: TLSConfig<'_, '_, '_>,
 ) -> io::Result<AsyncTcpStream<S>> {
     cfg_if! {
-        if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
+        if #[cfg(all(feature = "rustls-futures", feature = "rustls-platform-verifier"))] {
+            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_platform_verifier(), domain, config).await
+        } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config).await
         } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-webpki-roots-certs"))] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config).await

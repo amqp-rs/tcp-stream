@@ -15,7 +15,7 @@ rust-version  = "1.88.0"
 name = "tcp_stream"
 
 [features]
-default                   = ["rustls-native-certs", "rustls--aws_lc_rs", "tokio"]
+default                   = ["rustls-platform-verifier", "rustls--aws_lc_rs", "tokio"]
 futures                   = ["dep:futures-io", "dep:async-rs"]
 
 async-global-executor     = ["futures", "async-rs?/async-global-executor", "async-rs?/async-io"]
@@ -28,8 +28,9 @@ rustls-futures            = ["futures", "rustls", "rustls-connector/futures"]
 
 native-tls                = ["dep:native-tls", "dep:rustls-pki-types"]
 openssl                   = ["dep:openssl"]
-rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-roots-certs"]
+rustls-platform-verifier  = ["rustls", "rustls-connector/platform-verifier"]
 rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
+rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-root-certs"]
 rustls                    = ["dep:rustls-connector", "dep:p12-keystore"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 
@@ -73,7 +74,7 @@ version = "^0.2"
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.22"
+version          = "^0.23"
 optional         = true
 default-features = false
 
