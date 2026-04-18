@@ -206,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "async-rs"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb8b8f156acacf01c42b89b584f66ad2b4b73d05486561296982177adc202983"
+checksum = "31ebdd144e4199c67b5134fe2280e40d9656071f11df525d3322b43b6534c714"
 dependencies = [
  "async-compat",
  "async-global-executor",
@@ -2089,7 +2089,7 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 
 [[package]]
 name = "tcp-stream"
-version = "0.34.4"
+version = "0.34.5"
 dependencies = [
  "async-native-tls",
  "async-openssl",
