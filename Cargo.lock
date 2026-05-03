@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "async-openssl"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93132a496760aba205a44d612856bd0801fe193983dfc6fc82c85b52e1790ff6"
+checksum = "a51d8338bdbfac755acec57252c6b2e0f73b3a7a431c0397a00345c69e72adf8"
 dependencies = [
  "futures-io",
  "openssl",
@@ -206,15 +206,14 @@ dependencies = [
 
 [[package]]
 name = "async-rs"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31ebdd144e4199c67b5134fe2280e40d9656071f11df525d3322b43b6534c714"
+checksum = "4e32bd31386d41d0c06bd79b0397ec96e544d69d9dbd6db0236c7ceefe1ad61b"
 dependencies = [
  "async-compat",
  "async-global-executor",
  "async-io",
  "async-trait",
- "cfg-if",
  "futures-core",
  "futures-io",
  "hickory-resolver",
