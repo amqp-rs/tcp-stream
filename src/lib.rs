@@ -271,15 +271,6 @@ impl TcpStream {
 }
 
 fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
-    let stream = connect_std_raw(addr, timeout)?;
-    stream.set_nodelay(true)?;
-    Ok(stream)
-}
-
-fn connect_std_raw<A: ToSocketAddrs>(
-    addr: A,
-    timeout: Option<Duration>,
-) -> io::Result<StdTcpStream> {
     if let Some(timeout) = timeout {
         let addrs = addr.to_socket_addrs()?;
         let mut err = None;
@@ -338,6 +329,7 @@ impl TryFrom<StdTcpStream> for TcpStream {
     type Error = io::Error;
 
     fn try_from(s: StdTcpStream) -> io::Result<Self> {
+        s.set_nodelay(true)?;
         let mut this = Self::Plain(s);
         this.try_connect()?;
         Ok(this)
