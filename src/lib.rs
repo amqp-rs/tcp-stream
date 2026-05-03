@@ -206,8 +206,8 @@ impl TcpStream {
     }
 
     /// Attempt writing to underlying stream, returning Ok(()) if the stream is writable
-    pub fn is_writable(&mut self) -> io::Result<()> {
-        is_writable(self.deref_mut())
+    pub fn is_writable(&self) -> io::Result<()> {
+        is_writable(self.deref())
     }
 
     /// Retry the connection. Returns:
@@ -309,7 +309,7 @@ fn try_connect(stream: &mut StdTcpStream) -> io::Result<bool> {
     }
 }
 
-fn is_writable(stream: &mut StdTcpStream) -> io::Result<()> {
+fn is_writable(mut stream: &StdTcpStream) -> io::Result<()> {
     stream.write(&[]).map(|_| ())
 }
 
