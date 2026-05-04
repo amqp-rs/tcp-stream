@@ -111,7 +111,7 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
         } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config).await
         } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-webpki-roots-certs"))] {
-            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config).await
+            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_webpki_root_certs(), domain, config).await
         } else if #[cfg(feature = "rustls-futures")] {
             crate::into_rustls_impl_async(s, RustlsConnectorConfig::default(), domain, config).await
         } else if #[cfg(feature = "openssl-futures")] {
