@@ -311,7 +311,7 @@ fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> H
         } else if #[cfg(feature = "rustls-native-certs")] {
             into_rustls_impl(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
         } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-            into_rustls_impl(s, RustlsConnectorConfig::new_with_webpki_roots_certs(), domain, config)
+            into_rustls_impl(s, RustlsConnectorConfig::new_with_webpki_root_certs(), domain, config)
         } else if #[cfg(feature = "rustls")] {
             into_rustls_impl(s, RustlsConnectorConfig::default(), domain, config)
         } else if #[cfg(feature = "openssl")] {
