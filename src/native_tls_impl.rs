@@ -45,7 +45,7 @@ fn native_tls_connector_builder(
         builder.identity(native_identity.map_err(io::Error::other)?);
     }
     if let Some(cert_chain) = config.cert_chain {
-        let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
+        let mut cert_chain = io::BufReader::new(cert_chain.as_bytes());
         for cert in CertificateDer::pem_reader_iter(&mut cert_chain)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?

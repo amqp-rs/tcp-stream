@@ -37,7 +37,7 @@ fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpensslConnect
         let (cert, pkey, chain) = match identity {
             Identity::PKCS8 { pem, key } => {
                 let pkey = openssl::pkey::PKey::private_key_from_pem(key)?;
-                let mut chain = openssl::x509::X509::stack_from_pem(pem)?.into_iter();
+                let mut chain = X509::stack_from_pem(pem)?.into_iter();
                 let cert = chain.next();
                 (cert, Some(pkey), Some(chain.collect()))
             }
