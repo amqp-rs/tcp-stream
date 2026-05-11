@@ -1,10 +1,36 @@
-# std::net::TcpStream on steroids
+<div align="center">
 
 [![API Docs](https://docs.rs/tcp-stream/badge.svg)](https://docs.rs/tcp-stream)
 [![Build status](https://github.com/amqp-rs/tcp-stream/workflows/Build%20and%20test/badge.svg)](https://github.com/amqp-rs/tcp-stream/actions)
 [![Downloads](https://img.shields.io/crates/d/tcp-stream.svg)](https://crates.io/crates/tcp-stream)
+[![Dependency Status](https://deps.rs/repo/github/amqp-rs/tcp-stream/status.svg)](https://deps.rs/repo/github/amqp-rs/tcp-stream)
+[![LICENSE](https://img.shields.io/crates/l/tcp-stream)](LICENSE)
 
-tcp-stream is a library aiming at providing TLS support to std::net::TcpStream
+ <strong>
+   std::net::TcpStream with TLS support.
+ </strong>
+
+</div>
+
+<br />
+
+## Runtime
+
+- tokio (default)
+- smol
+- async-global-executor
+
+## TLS backends
+
+- native-tls
+- openssl
+- rustls (default)
+
+## Rustls certificates store
+
+- rustls-platform-verifier (default)
+- rustls-native-certs
+- rustls-webpki-roots-certs
 
 ## Warning about crypto backends for rustls
 
@@ -14,7 +40,7 @@ Available options are:
 - `rustls--aws_lc_rs` (default)
 - `rustls--ring`
 
-# Examples
+## Example
 
 To connect to a remote server:
 

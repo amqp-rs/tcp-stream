@@ -23,6 +23,7 @@ impl AsRawFd for &TcpStream {
 }
 
 impl FromRawFd for TcpStream {
+    #[allow(unsafe_code)]
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self::Plain(unsafe { StdTcpStream::from_raw_fd(fd) })
     }

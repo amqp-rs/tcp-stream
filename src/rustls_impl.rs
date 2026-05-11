@@ -35,7 +35,7 @@ fn update_rustls_config(
     config: &TLSConfig<'_, '_, '_>,
 ) -> io::Result<()> {
     if let Some(cert_chain) = config.cert_chain {
-        let mut cert_chain = std::io::BufReader::new(cert_chain.as_bytes());
+        let mut cert_chain = io::BufReader::new(cert_chain.as_bytes());
         let certs = CertificateDer::pem_reader_iter(&mut cert_chain)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
@@ -65,7 +65,7 @@ fn rustls_identity(
             )
         }
         Identity::PKCS8 { pem, key } => {
-            let mut cert_reader = std::io::BufReader::new(pem);
+            let mut cert_reader = io::BufReader::new(pem);
             let certs = CertificateDer::pem_reader_iter(&mut cert_reader)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;

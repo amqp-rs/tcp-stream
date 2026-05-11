@@ -4,6 +4,7 @@ use async_rs::traits::*;
 use cfg_if::cfg_if;
 use futures_io::{AsyncRead, AsyncWrite};
 use std::{
+    fmt,
     io::{self, IoSlice, IoSliceMut},
     pin::Pin,
     task::{Context, Poll},
@@ -30,6 +31,14 @@ pub enum AsyncTcpStream<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     #[cfg(feature = "rustls-futures")]
     /// Wrapper around a TLS async stream hanled by rustls
     Rustls(RustlsAsyncStream<S>),
+}
+
+impl<S: AsyncRead + AsyncWrite + fmt::Debug + Send + Unpin + 'static> fmt::Debug
+    for AsyncTcpStream<S>
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AsyncTcpStream").finish_non_exhaustive()
+    }
 }
 
 impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
