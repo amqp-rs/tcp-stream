@@ -23,6 +23,7 @@ impl AsRawSocket for &TcpStream {
 }
 
 impl FromRawSocket for TcpStream {
+    #[allow(unsafe_code)]
     unsafe fn from_raw_socket(socket: RawSocket) -> Self {
         Self::Plain(unsafe { StdTcpStream::from_raw_socket(socket) })
     }
