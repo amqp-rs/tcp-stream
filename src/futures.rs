@@ -23,13 +23,13 @@ pub enum AsyncTcpStream<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Wrapper around plain async TCP stream
     Plain(S),
     #[cfg(feature = "native-tls-futures")]
-    /// Wrapper around a TLS async stream hanled by native-tls
+    /// Wrapper around a TLS async stream handled by native-tls
     NativeTls(NativeTlsAsyncStream<S>),
     #[cfg(feature = "openssl-futures")]
-    /// Wrapper around a TLS async stream hanled by openssl
+    /// Wrapper around a TLS async stream handled by openssl
     Openssl(OpensslAsyncStream<S>),
     #[cfg(feature = "rustls-futures")]
-    /// Wrapper around a TLS async stream hanled by rustls
+    /// Wrapper around a TLS async stream handled by rustls
     Rustls(RustlsAsyncStream<S>),
 }
 

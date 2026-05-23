@@ -25,6 +25,8 @@ impl AsRawSocket for &TcpStream {
 impl FromRawSocket for TcpStream {
     #[allow(unsafe_code)]
     unsafe fn from_raw_socket(socket: RawSocket) -> Self {
+        // SAFETY: The caller guarantees `socket` is a valid, owned socket handle,
+        // which is the same contract as `StdTcpStream::from_raw_socket`.
         Self::Plain(unsafe { StdTcpStream::from_raw_socket(socket) })
     }
 }

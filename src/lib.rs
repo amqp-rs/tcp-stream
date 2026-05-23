@@ -95,13 +95,13 @@ pub enum TcpStream {
     /// Wrapper around std::net::TcpStream
     Plain(StdTcpStream),
     #[cfg(feature = "native-tls")]
-    /// Wrapper around a TLS stream hanled by native-tls
+    /// Wrapper around a TLS stream handled by native-tls
     NativeTls(NativeTlsStream),
     #[cfg(feature = "openssl")]
-    /// Wrapper around a TLS stream hanled by openssl
+    /// Wrapper around a TLS stream handled by openssl
     Openssl(OpensslStream),
     #[cfg(feature = "rustls")]
-    /// Wrapper around a TLS stream hanled by rustls
+    /// Wrapper around a TLS stream handled by rustls
     Rustls(RustlsStream),
 }
 

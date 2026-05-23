@@ -25,6 +25,8 @@ impl AsRawFd for &TcpStream {
 impl FromRawFd for TcpStream {
     #[allow(unsafe_code)]
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
+        // SAFETY: The caller guarantees `fd` is a valid, owned file descriptor,
+        // which is the same contract as `StdTcpStream::from_raw_fd`.
         Self::Plain(unsafe { StdTcpStream::from_raw_fd(fd) })
     }
 }
