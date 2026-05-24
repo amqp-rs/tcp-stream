@@ -52,7 +52,7 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
 
     /// Upgrade this plain stream to TLS using the feature-selected backend (rustls by default).
     ///
-    /// Unlike the synchronous [`TcpStream::into_tls`], this completes the full handshake
+    /// Unlike the synchronous [`TcpStream::into_tls`](crate::TcpStream::into_tls), this completes the full handshake
     /// asynchronously and returns `io::Result<Self>` directly — there is no
     /// mid-handshake state to retry.
     pub async fn into_tls(self, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<Self> {

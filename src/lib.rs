@@ -301,7 +301,7 @@ impl TcpStream {
     ///
     /// The TLS backend is selected by feature flag (rustls by default; native-tls or openssl
     /// as alternatives). Use [`into_rustls`](Self::into_rustls),
-    /// [`into_native_tls`](Self::into_native_tls), or [`into_openssl`](Self::into_openssl) to
+    /// `into_native_tls`, or `into_openssl` to
     /// target a specific backend explicitly.
     pub fn into_tls(
         self,
