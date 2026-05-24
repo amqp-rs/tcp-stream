@@ -6,39 +6,54 @@
 [![Dependency Status](https://deps.rs/repo/github/amqp-rs/tcp-stream/status.svg)](https://deps.rs/repo/github/amqp-rs/tcp-stream)
 [![LICENSE](https://img.shields.io/crates/l/tcp-stream)](LICENSE)
 
- <strong>
-   std::net::TcpStream with TLS support.
- </strong>
+**A `TcpStream` with pluggable TLS support.**
 
 </div>
 
-<br />
+Wraps `std::net::TcpStream` in a `TcpStream` enum that can be upgraded to a
+TLS-encrypted stream via `TcpStream::into_tls`. Supported backends are rustls
+(default), native-tls, and OpenSSL. Async `futures-io` trait implementations
+are provided when the `futures` feature is enabled.
 
-## Runtime
+## Feature flags
 
-- tokio (default)
-- smol
-- async-global-executor
+### Async runtime (pick exactly one)
 
-## TLS backends
+| Flag | Notes |
+|------|-------|
+| `tokio` *(default)* | Requires a running Tokio runtime |
+| `smol` | Uses the smol executor |
+| `async-global-executor` | Uses async-global-executor |
 
-- native-tls
-- openssl
-- rustls (default)
+### TLS backend (pick at most one)
 
-## Rustls certificates store
+| Flag | Notes |
+|------|-------|
+| `rustls` *(default)* | TLS via rustls |
+| `native-tls` | TLS via the platform's native library |
+| `openssl` | TLS via OpenSSL |
 
-- rustls-platform-verifier (default)
-- rustls-native-certs
-- rustls-webpki-roots-certs
+### Rustls certificate store (when `rustls` is active)
 
-## Warning about crypto backends for rustls
+| Flag | Notes |
+|------|-------|
+| `rustls-platform-verifier` *(default)* | Uses the platform trust store |
+| `rustls-native-certs` | Loads native root certificates |
+| `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
 
-A crypto implementation must be enabled in rustls using feature flags.
-We mimic what rustls does, providing one feature flag per implementation and enabling the same as rustls by default.
-Available options are:
-- `rustls--aws_lc_rs` (default)
-- `rustls--ring`
+### Rustls crypto provider (at least one required)
+
+| Flag | Notes |
+|------|-------|
+| `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
+| `rustls--ring` | Uses ring (more portable, e.g. builds on Windows) |
+
+### Miscellaneous
+
+| Flag | Notes |
+|------|-------|
+| `futures` | Enable `futures-io` async trait impls on the encrypted stream |
+| `vendored-openssl` | Build a vendored OpenSSL (requires `openssl` feature) |
 
 ## Example
 

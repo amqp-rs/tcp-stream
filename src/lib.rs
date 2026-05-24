@@ -7,11 +7,55 @@
 )]
 #![allow(clippy::large_enum_variant, clippy::result_large_err)]
 
-//! # std::net::TCP stream on steroids
+//! A [`TcpStream`] with pluggable TLS support.
 //!
-//! tcp-stream is a library aiming at providing TLS support to std::net::TcpStream
+//! Wraps `std::net::TcpStream` in a [`TcpStream`] enum that can be upgraded
+//! to a TLS-encrypted stream via [`TcpStream::into_tls`]. Supported backends
+//! are rustls (default), native-tls, and OpenSSL, selected through feature
+//! flags. Async variants of the encrypted stream are provided via the
+//! `futures-io` traits when the `futures` feature is enabled.
 //!
-//! # Examples
+//! # Feature flags
+//!
+//! ## Async runtime (pick exactly one)
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `tokio` *(default)* | Requires a running Tokio runtime |
+//! | `smol` | Uses the smol executor |
+//! | `async-global-executor` | Uses async-global-executor |
+//!
+//! ## TLS backend (pick at most one; `rustls` is the default)
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `rustls` *(default)* | TLS via rustls |
+//! | `native-tls` | TLS via the platform's native library |
+//! | `openssl` | TLS via OpenSSL |
+//!
+//! ## Rustls certificate store (only when `rustls` is active)
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `rustls-platform-verifier` *(default)* | Uses the platform trust store |
+//! | `rustls-native-certs` | Loads native root certificates |
+//! | `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
+//!
+//! ## Rustls crypto provider (at least one must be enabled)
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
+//! | `rustls--ring` | Uses ring (more portable) |
+//!
+//! ## Miscellaneous
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `futures` | Enable `futures-io` async trait impls on the encrypted stream |
+//! | `vendored-openssl` | Build a vendored OpenSSL (requires `openssl` feature) |
+//!
+//! # Example
 //!
 //! To connect to a remote server:
 //!
