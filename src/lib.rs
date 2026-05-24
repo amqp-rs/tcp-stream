@@ -142,6 +142,7 @@ macro_rules! fwd_impl {
     };
 }
 
+#[cfg(feature = "futures")]
 macro_rules! fwd_pin_impl {
     ($self:ident, $method:ident, $($args:expr),*) => {
         match $self.get_mut() {
