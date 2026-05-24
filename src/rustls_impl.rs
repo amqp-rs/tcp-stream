@@ -79,10 +79,30 @@ fn rustls_identity(
     Ok((certs, key))
 }
 
-fn rustls_connector(
-    mut c: RustlsConnectorConfig,
+fn select_connector_config() -> io::Result<RustlsConnectorConfig> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "rustls-platform-verifier")] {
+            Ok(RustlsConnectorConfig::new_with_platform_verifier())
+        } else if #[cfg(feature = "rustls-native-certs")] {
+            RustlsConnectorConfig::new_with_native_certs()
+        } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
+            Ok(RustlsConnectorConfig::new_with_webpki_root_certs())
+        } else {
+            Ok(RustlsConnectorConfig::default())
+        }
+    }
+}
+
+pub(crate) fn into_rustls_impl(
+    s: TcpStream,
+    domain: &str,
     config: TLSConfig<'_, '_, '_>,
-) -> io::Result<RustlsConnector> {
+) -> HandshakeResult {
+    s.into_rustls(&rustls_connector(config)?, domain)
+}
+
+fn rustls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<RustlsConnector> {
+    let mut c = select_connector_config()?;
     update_rustls_config(&mut c, &config)?;
 
     let connector = if let Some(identity) = config.identity {
@@ -94,25 +114,13 @@ fn rustls_connector(
     Ok(connector)
 }
 
-#[allow(dead_code)]
-pub(crate) fn into_rustls_impl(
-    s: TcpStream,
-    c: RustlsConnectorConfig,
-    domain: &str,
-    config: TLSConfig<'_, '_, '_>,
-) -> HandshakeResult {
-    s.into_rustls(&rustls_connector(c, config)?, domain)
-}
-
 #[cfg(feature = "rustls-futures")]
-#[allow(dead_code)]
 pub(crate) async fn into_rustls_impl_async<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
     s: AsyncTcpStream<S>,
-    c: RustlsConnectorConfig,
     domain: &str,
     config: TLSConfig<'_, '_, '_>,
 ) -> io::Result<AsyncTcpStream<S>> {
-    s.into_rustls(&rustls_connector(c, config)?, domain).await
+    s.into_rustls(&rustls_connector(config)?, domain).await
 }
 
 impl From<RustlsStream> for TcpStream {

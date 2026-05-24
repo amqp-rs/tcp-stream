@@ -15,7 +15,7 @@ use crate::{NativeTlsAsyncStream, NativeTlsConnectorBuilder};
 #[cfg(feature = "openssl-futures")]
 use crate::{OpensslAsyncStream, OpensslConnector};
 #[cfg(feature = "rustls-futures")]
-use crate::{RustlsAsyncStream, RustlsConnector, RustlsConnectorConfig};
+use crate::{RustlsAsyncStream, RustlsConnector};
 
 /// Wrapper around plain or TLS async TCP streams
 #[non_exhaustive]
@@ -115,14 +115,8 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
     config: TLSConfig<'_, '_, '_>,
 ) -> io::Result<AsyncTcpStream<S>> {
     cfg_if! {
-        if #[cfg(all(feature = "rustls-futures", feature = "rustls-platform-verifier"))] {
-            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_platform_verifier(), domain, config).await
-        } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-native-certs"))] {
-            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config).await
-        } else if #[cfg(all(feature = "rustls-futures", feature = "rustls-webpki-roots-certs"))] {
-            crate::into_rustls_impl_async(s, RustlsConnectorConfig::new_with_webpki_root_certs(), domain, config).await
-        } else if #[cfg(feature = "rustls-futures")] {
-            crate::into_rustls_impl_async(s, RustlsConnectorConfig::default(), domain, config).await
+        if #[cfg(feature = "rustls-futures")] {
+            crate::into_rustls_impl_async(s, domain, config).await
         } else if #[cfg(feature = "openssl-futures")] {
             crate::into_openssl_impl_async(s, domain, config).await
         } else if #[cfg(feature = "native-tls-futures")] {
@@ -134,27 +128,13 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
     }
 }
 
-macro_rules! fwd_impl {
-    ($self:ident, $method:ident, $($args:expr),*) => {
-        match $self.get_mut() {
-            Self::Plain(plain) => Pin::new(plain).$method($($args),*),
-            #[cfg(feature = "native-tls-futures")]
-            Self::NativeTls(tls) => Pin::new(tls).$method($($args),*),
-            #[cfg(feature = "openssl-futures")]
-            Self::Openssl(tls) => Pin::new(tls).$method($($args),*),
-            #[cfg(feature = "rustls-futures")]
-            Self::Rustls(tls) => Pin::new(tls).$method($($args),*),
-        }
-    };
-}
-
 impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncRead for AsyncTcpStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        fwd_impl!(self, poll_read, cx, buf)
+        fwd_pin_impl!(self, poll_read, cx, buf)
     }
 
     fn poll_read_vectored(
@@ -162,7 +142,7 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncRead for AsyncTcpS
         cx: &mut Context<'_>,
         bufs: &mut [IoSliceMut<'_>],
     ) -> Poll<io::Result<usize>> {
-        fwd_impl!(self, poll_read_vectored, cx, bufs)
+        fwd_pin_impl!(self, poll_read_vectored, cx, bufs)
     }
 }
 
@@ -172,7 +152,7 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncWrite for AsyncTcp
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        fwd_impl!(self, poll_write, cx, buf)
+        fwd_pin_impl!(self, poll_write, cx, buf)
     }
 
     fn poll_write_vectored(
@@ -180,14 +160,14 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncWrite for AsyncTcp
         cx: &mut Context<'_>,
         bufs: &[IoSlice<'_>],
     ) -> Poll<io::Result<usize>> {
-        fwd_impl!(self, poll_write_vectored, cx, bufs)
+        fwd_pin_impl!(self, poll_write_vectored, cx, bufs)
     }
 
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        fwd_impl!(self, poll_flush, cx)
+        fwd_pin_impl!(self, poll_flush, cx)
     }
 
     fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        fwd_impl!(self, poll_close, cx)
+        fwd_pin_impl!(self, poll_close, cx)
     }
 }

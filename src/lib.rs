@@ -128,6 +128,34 @@ mod openssl_impl;
 #[cfg(feature = "openssl")]
 pub use openssl_impl::*;
 
+macro_rules! fwd_impl {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        match $self {
+            Self::Plain(plain) => plain.$method($($args),*),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(tls) => tls.$method($($args),*),
+            #[cfg(feature = "openssl")]
+            Self::Openssl(tls) => tls.$method($($args),*),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(tls) => tls.$method($($args),*),
+        }
+    };
+}
+
+macro_rules! fwd_pin_impl {
+    ($self:ident, $method:ident, $($args:expr),*) => {
+        match $self.get_mut() {
+            Self::Plain(plain) => Pin::new(plain).$method($($args),*),
+            #[cfg(feature = "native-tls-futures")]
+            Self::NativeTls(tls) => Pin::new(tls).$method($($args),*),
+            #[cfg(feature = "openssl-futures")]
+            Self::Openssl(tls) => Pin::new(tls).$method($($args),*),
+            #[cfg(feature = "rustls-futures")]
+            Self::Rustls(tls) => Pin::new(tls).$method($($args),*),
+        }
+    };
+}
+
 #[cfg(feature = "futures")]
 mod futures;
 #[cfg(feature = "futures")]
@@ -356,14 +384,8 @@ fn is_writable(mut stream: &StdTcpStream) -> io::Result<()> {
 
 fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
     cfg_if! {
-        if #[cfg(feature = "rustls-platform-verifier")] {
-            into_rustls_impl(s, RustlsConnectorConfig::new_with_platform_verifier(), domain, config)
-        } else if #[cfg(feature = "rustls-native-certs")] {
-            into_rustls_impl(s, RustlsConnectorConfig::new_with_native_certs()?, domain, config)
-        } else if #[cfg(feature = "rustls-webpki-roots-certs")] {
-            into_rustls_impl(s, RustlsConnectorConfig::new_with_webpki_root_certs(), domain, config)
-        } else if #[cfg(feature = "rustls")] {
-            into_rustls_impl(s, RustlsConnectorConfig::default(), domain, config)
+        if #[cfg(feature = "rustls")] {
+            into_rustls_impl(s, domain, config)
         } else if #[cfg(feature = "openssl")] {
             into_openssl_impl(s, domain, config)
         } else if #[cfg(feature = "native-tls")] {
@@ -414,20 +436,6 @@ impl DerefMut for TcpStream {
             Self::Rustls(tls) => tls.get_mut(),
         }
     }
-}
-
-macro_rules! fwd_impl {
-    ($self:ident, $method:ident, $($args:expr),*) => {
-        match $self {
-            Self::Plain(plain) => plain.$method($($args),*),
-            #[cfg(feature = "native-tls")]
-            Self::NativeTls(tls) => tls.$method($($args),*),
-            #[cfg(feature = "openssl")]
-            Self::Openssl(tls) => tls.$method($($args),*),
-            #[cfg(feature = "rustls")]
-            Self::Rustls(tls) => tls.$method($($args),*),
-        }
-    };
 }
 
 impl Read for TcpStream {
