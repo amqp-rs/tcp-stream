@@ -296,7 +296,13 @@ impl TcpStream {
         try_connect(self)
     }
 
-    /// Enable TLS
+    /// Upgrade this plain stream to TLS, returning either a completed [`TcpStream`] or a
+    /// [`HandshakeError::WouldBlock`] mid-handshake value that can be retried.
+    ///
+    /// The TLS backend is selected by feature flag (rustls by default; native-tls or openssl
+    /// as alternatives). Use [`into_rustls`](Self::into_rustls),
+    /// [`into_native_tls`](Self::into_native_tls), or [`into_openssl`](Self::into_openssl) to
+    /// target a specific backend explicitly.
     pub fn into_tls(
         self,
         domain: &str,
@@ -535,7 +541,10 @@ impl MidHandshakeTlsStream {
         }
     }
 
-    /// Retry the handshake
+    /// Retry a non-blocking TLS handshake that previously returned [`HandshakeError::WouldBlock`].
+    ///
+    /// Returns the completed [`TcpStream`] on success, or a new [`HandshakeError`] if the
+    /// handshake would block again or fails permanently.
     pub fn handshake(mut self) -> HandshakeResult {
         if !try_connect(self.get_mut())? {
             return Err(HandshakeError::WouldBlock(self));
