@@ -55,6 +55,24 @@ are provided when the `futures` feature is enabled.
 | `futures` | Enable `futures-io` async trait impls on the encrypted stream |
 | `vendored-openssl` | Build a vendored OpenSSL (requires `openssl` feature) |
 
+For client authentication with native-tls on Apple platforms other than macOS,
+use a PKCS#12 identity. Configuring a PKCS#8 identity there returns `Unsupported`.
+native-tls itself panics on Apple platforms for a PKCS#12 bundle without a
+private key, and with OpenSSL 3 it sends a PKCS#12 bundle's extra certificates
+root first; prefer PKCS#8 identities or the OpenSSL backend where these matter.
+PKCS#8 identities require an unencrypted private key. Native TLS validates the
+complete PKCS#8 DER structure and imports normalized PEM containing only the
+validated key and certificates, reading the legacy `X509 CERTIFICATE` label as
+OpenSSL does. Encrypted or malformed keys return
+`InvalidData`, including encrypted DER mislabeled `PRIVATE KEY` and legacy
+encryption headers; OpenSSL supplies an explicit empty passphrase, rejects
+encrypted certificates, and also reports a certificate that does not match its
+key as `InvalidData`. Every backend reports a malformed PKCS#12 bundle as
+`InvalidData` too. Neither backend prompts
+interactively for a decryption password. These checks apply to both synchronous
+and async upgrades. Native TLS and OpenSSL reject NUL bytes in TLS domains and
+PKCS#12 passwords with `InvalidInput`.
+
 ## Example
 
 To connect to a remote server:
@@ -87,3 +105,5 @@ can block a blocking socket.
 Urgent data counts as readable only when `SO_OOBINLINE` is enabled.
 
 `connect_timeout()` tries each resolved address in turn with the full timeout.
+
+Identity `Debug` output redacts the certificate bundle, private key, and password.

@@ -35,11 +35,13 @@ The same pattern is repeated for `MidHandshakeTlsStream` (non-blocking handshake
 | `src/probe_checks.rs` | Zero-length probe checks for targets without rustix support |
 | `src/rustls_impl.rs` | rustls backend — re-exports, `RustlsConnectorConfig` helpers, `From` conversions |
 | `src/native_tls_impl.rs` | native-tls backend |
+| `src/pem.rs` | PEM certificate parsing shared by all backends, including the legacy label |
 | `src/openssl_impl.rs` | openssl backend |
 | `src/futures.rs` | `AsyncTcpStream<S>` — async version using `futures-io` traits, same multi-backend pattern |
 | `src/sys/unix.rs` | `AsFd`, `AsRawFd`, `FromRawFd` impls |
 | `src/sys/windows.rs` | Windows equivalents |
-| `src/tests.rs` | Socket regression tests |
+| `src/tests.rs` | Socket and identity regression tests |
+| `tests/fixtures/` | Test certificate chain, root, and PKCS#8/PKCS#12 identities |
 
 ### Feature flags
 
@@ -54,6 +56,62 @@ Rustls requires a crypto provider feature: `rustls--aws_lc_rs` (default) or `rus
 `TLSConfig` carries an optional `Identity` (borrowed) or `OwnedIdentity` (owned). Both support two formats:
 - `PKCS12` — DER-encoded bundle with a password
 - `PKCS8` — PEM certificate + PEM key pair
+
+Identity `Debug` implementations redact the bundle, key, and password.
+Native TLS on Apple platforms other than macOS requires PKCS#12 identities;
+reject PKCS#8 with `Unsupported` before calling the upstream unimplemented method.
+Upstream native-tls panics on Apple for a PKCS#12 bundle without a private key,
+and always reverses PKCS#12 extra certificates, which OpenSSL 3 already returns
+in order; both are documented in the README rather than worked around.
+OpenSSL client identity certificates remain in leaf-to-root order: `PKCS12_parse`
+reverses the extra certificates in some SSL libraries, so orient them by their
+issuer links instead of by library version.
+OpenSSL identities require a matching certificate and private key. Every backend
+reports malformed PKCS#12 bundles as `InvalidData`; OpenSSL also reports
+malformed or encrypted keys and mismatched certificates that way, and Native TLS
+its identity import failures and, when an identity is configured, its connector
+build failures; the async Native TLS upgrade
+builds the connector before connecting so that this holds there too. Rustls
+checks that each identity-chain object has the DER shape of a certificate,
+including the start of its to-be-signed part, so a non-certificate such as a CRL
+or a certification request fails at configuration as in the other backends; a
+full X.509 parse would reject certificates that servers accept. Build these errors with
+`crate::invalid_data`.
+Never pass certificate PEM to OpenSSL's PEM reader: `X509::stack_from_pem` gives
+it no password callback, so an encrypted object would make it prompt. Decode the
+certificates with `src/pem.rs` and load them with `X509::from_der`.
+`x509_certificates` loads the DER that `src/pem.rs` decoded.
+Use an explicit empty passphrase when loading OpenSSL PKCS#8 keys, so password
+handling never opens a terminal. The PKCS#8 identity format provides no password.
+Validate Native TLS PKCS#8 PEM and the complete unencrypted DER structure with
+the stable `pkcs8` 0.10 parser before importing it; find the key object with
+`pem::pem_private_key`, which follows the certificate boundary rules and decodes
+into a single wiped buffer. Rustls finds its key with `pem::pem_any_private_key`. PEM labels and heuristic DER
+classification alone do not exclude encrypted DER that can invoke a password
+callback. Reject encrypted/malformed keys with `InvalidData`; retain the earlier
+`Unsupported` error on Apple platforms without PKCS#8 support. Normalize the
+validated first key and certificates into fresh PEM before importing them;
+macOS imports every PEM object, so passing the original blobs can expose extra
+encrypted objects to its UI. Like OpenSSL's certificate reader, `src/pem.rs`
+reads `CERTIFICATE` and legacy `X509 CERTIFICATE` objects, skips the others,
+including `TRUSTED CERTIFICATE` and malformed ones, and ignores data after a
+certificate's DER; every backend uses it for identity chains. Lines end at CR or
+LF, as in the PEM parsers, and may start with a byte order mark. As in
+rustls-pki-types, boundaries start a line: text that only mentions one is
+skipped, an object may start right after another one's end boundary, and a
+malformed boundary of a selected object, or naming one, is an error; other
+malformed boundary lines are only text, and indentation is skipped. An indented
+boundary inside a selected object is malformed base64, not a boundary. Key
+lookups stop after the first key object, as the PEM key readers do, so later
+objects cannot fail them. A PKCS#8 identity chain needs a certificate in
+every backend. Preserve certificate order, and zeroize the
+decoded PEM sections and the normalized private-key buffer; copies inside the PEM
+parser and the TLS library are outside tcp-stream's control. The shared connector builder applies
+these checks to synchronous and async upgrades.
+Reject NUL bytes in Native TLS / OpenSSL domains and PKCS#12 passwords before
+passing them upstream; return `InvalidInput` with a message that excludes the
+input. Keep validation inside the selected backend so plaintext fallback still
+ignores the TLS arguments.
 
 ### Socket behavior and tests
 
@@ -119,3 +177,11 @@ and no probe detects it without blocking, so `is_readable()` reports
 `WouldBlock` there (documented). `is_readable()` also checks the raw socket and does not
 account for buffered TLS plaintext.
 `connect_timeout()` gives each resolved address the full timeout.
+
+The Native
+TLS and OpenSSL encrypted-key regressions run in child processes with a
+five-second watchdog and reject terminal prompts. Native TLS covers legacy
+headers, mislabeled encrypted DER, trailing DER, and extra PEM objects, and tests
+that encrypted identities fail before async I/O starts. Assert the prepared key
+DER and certificate order as well as import success: Linux ignores extra PEM
+objects itself, so import success alone cannot protect the macOS path.

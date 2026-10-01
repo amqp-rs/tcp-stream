@@ -27,12 +27,12 @@ native-tls-futures        = ["dep:async-native-tls", "futures", "native-tls"]
 openssl-futures           = ["dep:async-openssl", "futures", "openssl"]
 rustls-futures            = ["futures", "rustls", "rustls-connector/futures"]
 
-native-tls                = ["dep:native-tls", "dep:rustls-pki-types"]
-openssl                   = ["dep:openssl"]
+native-tls                = ["dep:native-tls", "dep:pkcs8", "dep:rustls-pki-types"]
+openssl                   = ["dep:openssl", "dep:rustls-pki-types"]
 rustls-platform-verifier  = ["rustls", "rustls-connector/platform-verifier"]
 rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
 rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-root-certs"]
-rustls                    = ["dep:rustls-connector", "dep:p12-keystore"]
+rustls                    = ["dep:rustls-connector", "dep:p12-keystore", "dep:rustls-pki-types"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 
 # rustls crypto providers. Choose at least one. Otherwise, runtime errors.
@@ -82,13 +82,19 @@ optional = true
 version = "^0.2"
 optional = true
 
+[dependencies.pkcs8]
+version = "^0.10.2"
+default-features = false
+features = ["std", "pem"]
+optional = true
+
 [dependencies.rustls-connector]
 version          = "^0.23"
 optional         = true
 default-features = false
 
 [dependencies.rustls-pki-types]
-version          = "^1.4"
+version          = "^1.9"
 optional         = true
 default-features = false
 features         = ["std"]

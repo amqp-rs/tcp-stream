@@ -1452,6 +1452,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pkcs8"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
+dependencies = [
+ "der",
+ "spki",
+]
+
+[[package]]
 name = "pkg-config"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2012,6 +2022,7 @@ dependencies = [
  "native-tls",
  "openssl",
  "p12-keystore",
+ "pkcs8",
  "rustix",
  "rustls-connector",
  "rustls-pki-types",

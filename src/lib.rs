@@ -95,6 +95,18 @@ mod rustls_impl;
 #[cfg(feature = "rustls")]
 pub use rustls_impl::*;
 
+// Native TLS reads PEM only for PKCS#8 identities, which Apple platforms other
+// than macOS do not support.
+#[cfg(any(
+    feature = "rustls",
+    feature = "openssl",
+    all(
+        feature = "native-tls",
+        not(all(target_vendor = "apple", not(target_os = "macos")))
+    )
+))]
+mod pem;
+
 #[cfg(feature = "native-tls")]
 mod native_tls_impl;
 #[cfg(feature = "native-tls")]
@@ -104,6 +116,33 @@ pub use native_tls_impl::*;
 mod openssl_impl;
 #[cfg(feature = "openssl")]
 pub use openssl_impl::*;
+
+/// The error kind that every backend reports for invalid identities and roots.
+#[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
+fn invalid_data(error: impl Into<Box<dyn Error + Send + Sync>>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, error)
+}
+
+#[cfg(any(feature = "native-tls", feature = "openssl"))]
+fn validate_domain(domain: &str) -> io::Result<()> {
+    validate_no_nul(domain, "TLS domain contains a NUL byte")
+}
+
+#[cfg(any(feature = "native-tls", feature = "openssl"))]
+fn validate_pkcs12_password(password: &str) -> io::Result<()> {
+    validate_no_nul(password, "PKCS#12 password contains a NUL byte")
+}
+
+#[cfg(any(feature = "native-tls", feature = "openssl"))]
+fn validate_no_nul(value: &str, message: &'static str) -> io::Result<()> {
+    // These backends pass strings to C APIs. Upstream CString conversions can
+    // panic and include the offending bytes, including identity passwords.
+    if value.as_bytes().contains(&0) {
+        Err(io::Error::new(io::ErrorKind::InvalidInput, message))
+    } else {
+        Ok(())
+    }
+}
 
 macro_rules! fwd_impl {
     ($self:ident, $method:ident, $($args:expr),*) => {
@@ -186,19 +225,29 @@ impl OwnedTLSConfig {
 
 /// Holds one of:
 /// - PKCS#12 DER-encoded identity and decryption password
-/// - PKCS#8 PEM-encoded certificate and key (without decryption password)
-#[derive(Debug, PartialEq)]
+/// - PKCS#8 PEM-encoded certificate chain and key (without decryption password)
+///
+/// `Debug` output redacts all identity fields.
+#[derive(PartialEq)]
 pub enum Identity<'data, 'key> {
     /// PKCS#12 DER-encoded identity with decryption password
     PKCS12 {
         /// PKCS#12 DER-encoded identity
         der: &'data [u8],
         /// Decryption password
+        ///
+        /// Native TLS and OpenSSL reject embedded NUL bytes with `InvalidInput`.
         password: &'key str,
     },
-    /// PEM encoded DER private key with PEM encoded certificate
+    /// PKCS#8 PEM-encoded key with a PEM-encoded certificate chain.
+    /// Use an unencrypted key; no decryption password is supplied or requested
+    /// interactively.
+    /// Native TLS validates the full key structure and imports only normalized
+    /// PEM containing the validated key and certificates.
+    /// Native TLS on Apple platforms other than macOS requires PKCS#12;
+    /// configuring a PKCS#8 identity there returns `Unsupported`.
     PKCS8 {
-        /// PEM-encoded certificate
+        /// PEM-encoded certificate chain, leaf first
         pem: &'data [u8],
         /// PEM-encoded key
         key: &'key [u8],
@@ -207,19 +256,29 @@ pub enum Identity<'data, 'key> {
 
 /// Holds one of:
 /// - PKCS#12 DER-encoded identity and decryption password
-/// - PKCS#8 PEM-encoded certificate and key (without decryption password)
-#[derive(Clone, Debug, PartialEq)]
+/// - PKCS#8 PEM-encoded certificate chain and key (without decryption password)
+///
+/// `Debug` output redacts all identity fields.
+#[derive(Clone, PartialEq)]
 pub enum OwnedIdentity {
     /// PKCS#12 DER-encoded identity with decryption password
     PKCS12 {
         /// PKCS#12 DER-encoded identity
         der: Vec<u8>,
         /// Decryption password
+        ///
+        /// Native TLS and OpenSSL reject embedded NUL bytes with `InvalidInput`.
         password: String,
     },
-    /// PKCS#8 encoded DER private key with PEM encoded certificate
+    /// PKCS#8 PEM-encoded key with a PEM-encoded certificate chain.
+    /// Use an unencrypted key; no decryption password is supplied or requested
+    /// interactively.
+    /// Native TLS validates the full key structure and imports only normalized
+    /// PEM containing the validated key and certificates.
+    /// Native TLS on Apple platforms other than macOS requires PKCS#12;
+    /// configuring a PKCS#8 identity there returns `Unsupported`.
     PKCS8 {
-        /// PEM-encoded certificate
+        /// PEM-encoded certificate chain, leaf first
         pem: Vec<u8>,
         /// PEM-encoded key
         key: Vec<u8>,
@@ -234,6 +293,22 @@ impl OwnedIdentity {
             Self::PKCS8 { pem, key } => Identity::PKCS8 { pem, key },
             Self::PKCS12 { der, password } => Identity::PKCS12 { der, password },
         }
+    }
+}
+
+impl fmt::Debug for Identity<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::PKCS12 { .. } => "PKCS12",
+            Self::PKCS8 { .. } => "PKCS8",
+        };
+        f.debug_struct(name).finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for OwnedIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_ref().fmt(f)
     }
 }
 
@@ -317,21 +392,27 @@ impl TcpStream {
 
     #[cfg(feature = "native-tls")]
     /// Enable TLS using native-tls
+    ///
+    /// A domain containing a NUL byte returns `InvalidInput`.
     pub fn into_native_tls(
         self,
         connector: &NativeTlsConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
+        validate_domain(domain)?;
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
     #[cfg(feature = "openssl")]
     /// Enable TLS using openssl
+    ///
+    /// A domain containing a NUL byte returns `InvalidInput`.
     pub fn into_openssl(
         self,
         connector: &OpensslConnector,
         domain: &str,
     ) -> Result<Self, HandshakeError> {
+        validate_domain(domain)?;
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 

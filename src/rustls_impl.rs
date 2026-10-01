@@ -50,9 +50,9 @@ fn rustls_identity(
     let (certs, key) = match identity {
         Identity::PKCS12 { der, password } => {
             let pfx =
-                p12_keystore::KeyStore::from_pkcs12(der, password).map_err(io::Error::other)?;
+                p12_keystore::KeyStore::from_pkcs12(der, password).map_err(crate::invalid_data)?;
             let Some((_, keychain)) = pfx.private_key_chain() else {
-                return Err(io::Error::other("No private key in pkcs12 DER"));
+                return Err(crate::invalid_data("No private key in pkcs12 DER"));
             };
             let certs = keychain
                 .chain()
@@ -65,14 +65,17 @@ fn rustls_identity(
             )
         }
         Identity::PKCS8 { pem, key } => {
-            let mut cert_reader = io::BufReader::new(pem);
-            let certs = CertificateDer::pem_reader_iter(&mut cert_reader)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+            let certs = crate::pem::identity_certificates(pem)?;
+            // Reject what is not a certificate here, as the other backends do,
+            // rather than sending it to the server.
+            if !certs.iter().all(|cert| crate::pem::is_certificate(cert)) {
+                return Err(crate::pem::invalid_identity_chain());
+            }
             (
                 certs,
-                PrivateKeyDer::from_pem_slice(key)
-                    .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?,
+                crate::pem::pem_any_private_key(key).ok_or_else(|| {
+                    crate::invalid_data("PKCS#8 identity requires a valid PEM private key")
+                })?,
             )
         }
     };
@@ -141,5 +144,53 @@ impl From<RustlsHandshakeError> for HandshakeError {
             rustls_connector::HandshakeError::WouldBlock(mid) => Self::WouldBlock(mid.into()),
             rustls_connector::HandshakeError::Failure(failure) => Self::Failure(failure),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_identity_chains_with_other_objects_as_certificates() {
+        let not_a_certificate =
+            crate::tests::ENCRYPTED_KEY.replace("ENCRYPTED PRIVATE KEY", "CERTIFICATE");
+        let pem = [crate::tests::CERT_CHAIN, not_a_certificate.as_bytes()].concat();
+        let error = rustls_identity(Identity::PKCS8 {
+            pem: &pem,
+            key: crate::tests::PRIVATE_KEY,
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn rejects_malformed_pkcs12_as_invalid_data() {
+        let error = rustls_identity(Identity::PKCS12 {
+            der: b"not a PKCS12 bundle",
+            password: "",
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn accepts_pkcs8_identity_with_intermediates() {
+        let (certs, _) = rustls_identity(Identity::PKCS8 {
+            pem: crate::tests::CERT_CHAIN,
+            key: crate::tests::PRIVATE_KEY,
+        })
+        .unwrap();
+        assert_eq!(certs.len(), 3);
+    }
+
+    #[test]
+    fn accepts_pkcs12_identity_with_intermediates() {
+        let (certs, _) = rustls_identity(Identity::PKCS12 {
+            der: crate::tests::PKCS12_IDENTITY,
+            password: crate::tests::PKCS12_PASSWORD,
+        })
+        .unwrap();
+        assert_eq!(certs.len(), 3);
     }
 }

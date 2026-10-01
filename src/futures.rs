@@ -61,11 +61,14 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
 
     #[cfg(feature = "native-tls-futures")]
     /// Enable TLS using native-tls
+    ///
+    /// A domain containing a NUL byte returns `InvalidInput`.
     pub async fn into_native_tls(
         self,
         connector: NativeTlsConnectorBuilder,
         domain: &str,
     ) -> io::Result<Self> {
+        crate::validate_domain(domain)?;
         Ok(Self::NativeTls(
             async_native_tls::TlsConnector::from(connector)
                 .connect(domain, self.into_plain()?)
@@ -76,11 +79,14 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
 
     #[cfg(feature = "openssl-futures")]
     /// Enable TLS using openssl
+    ///
+    /// A domain containing a NUL byte returns `InvalidInput`.
     pub async fn into_openssl(
         self,
         connector: &OpensslConnector,
         domain: &str,
     ) -> io::Result<Self> {
+        crate::validate_domain(domain)?;
         let mut stream = async_openssl::SslStream::new(
             connector.configure()?.into_ssl(domain)?,
             self.into_plain()?,

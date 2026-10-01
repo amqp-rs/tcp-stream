@@ -3,6 +3,127 @@ use super::*;
 use std::net::SocketAddr;
 use std::{net::TcpListener, time::Instant};
 
+#[cfg(feature = "openssl")]
+pub(super) const ROOT_CERT: &str = include_str!("../tests/fixtures/root.pem");
+#[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
+pub(super) const CERT_CHAIN: &[u8] = include_bytes!("../tests/fixtures/chain.pem");
+#[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
+pub(super) const PRIVATE_KEY: &[u8] = include_bytes!("../tests/fixtures/key.pem");
+#[cfg(any(feature = "native-tls", feature = "openssl", feature = "rustls"))]
+pub(super) const PKCS12_IDENTITY: &[u8] = include_bytes!("../tests/fixtures/identity.p12");
+#[cfg(feature = "rustls")]
+pub(super) const PKCS12_PASSWORD: &str = "test password";
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
+pub(super) const ENCRYPTED_KEY: &str = include_str!("../tests/fixtures/encrypted-key.pem");
+
+/// The certificates in `pem`, read with rustls-pki-types.
+#[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
+pub(super) fn certificates(pem: &[u8]) -> Vec<rustls_pki_types::CertificateDer<'static>> {
+    use rustls_pki_types::pem::PemObject;
+
+    rustls_pki_types::CertificateDer::pem_slice_iter(pem)
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+/// The fixture's private key.
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+pub(super) fn pkcs8_key() -> rustls_pki_types::PrivatePkcs8KeyDer<'static> {
+    use rustls_pki_types::pem::PemObject;
+
+    rustls_pki_types::PrivatePkcs8KeyDer::from_pem_slice(PRIVATE_KEY).unwrap()
+}
+
+/// Check that a backend rejects a malformed PKCS#12 bundle as `InvalidData`,
+/// and a password containing NUL as `InvalidInput` without exposing it.
+#[cfg(any(feature = "native-tls", feature = "openssl"))]
+pub(super) fn check_pkcs12_rejections<T>(build: impl Fn(TLSConfig<'_, '_, '_>) -> io::Result<T>) {
+    for (der, password, expected) in [
+        (&b"not a PKCS12 bundle"[..], "", io::ErrorKind::InvalidData),
+        (
+            PKCS12_IDENTITY,
+            "secret\0password",
+            io::ErrorKind::InvalidInput,
+        ),
+    ] {
+        let error = build(TLSConfig {
+            identity: Some(Identity::PKCS12 { der, password }),
+            cert_chain: None,
+        })
+        .map(drop)
+        .expect_err("accepted an invalid PKCS#12 identity");
+        assert_eq!(error.kind(), expected);
+        assert!(!format!("{error:?}").contains("secret"));
+    }
+}
+
+/// Poll `future` once, with a waker that does nothing.
+#[cfg(any(feature = "native-tls-futures", feature = "openssl-futures"))]
+pub(super) fn poll_once<F: Future>(future: F) -> std::task::Poll<F::Output> {
+    std::pin::pin!(future).poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+}
+
+#[cfg(any(feature = "native-tls", feature = "openssl"))]
+pub(super) fn password_prompt_test_child(test_name: &str) -> bool {
+    use std::process::{Command, Stdio};
+
+    const CHILD_ENV: &str = "TCP_STREAM_PASSWORD_PROMPT_TEST_CHILD";
+    if std::env::var(CHILD_ENV).is_ok_and(|name| name == test_name) {
+        return true;
+    }
+
+    // OpenSSL can open /dev/tty even with null stdin. Bound the subprocess so
+    // restoring an interactive callback cannot hang the test runner.
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test_name, "--nocapture"])
+        .env(CHILD_ENV, test_name)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Drain the pipes while waiting, so a verbose child cannot block on them.
+    let drain = |mut pipe: Box<dyn Read + Send>| {
+        std::thread::spawn(move || {
+            let mut output = Vec::new();
+            pipe.read_to_end(&mut output).map(|_| output)
+        })
+    };
+    let stdout = drain(Box::new(child.stdout.take().unwrap()));
+    let stderr = drain(Box::new(child.stderr.take().unwrap()));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let (status, timed_out) = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break (status, false);
+        }
+        if Instant::now() >= deadline {
+            // It may have exited since try_wait; always reap it below.
+            let _ = child.kill();
+            break (child.wait().unwrap(), true);
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    let stdout = stdout.join().unwrap().unwrap();
+    let stderr = stderr.join().unwrap().unwrap();
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(
+        !timed_out,
+        "{test_name} did not finish within five seconds, possibly waiting for a password:\n{}\n{stderr}",
+        String::from_utf8_lossy(&stdout)
+    );
+    assert!(status.success(), "{test_name} child failed: {stderr}");
+    assert!(
+        String::from_utf8_lossy(&stdout).contains("1 passed"),
+        "{test_name} child did not run the regression"
+    );
+    let stderr = stderr.to_ascii_lowercase();
+    assert!(
+        !stderr.contains("pass phrase") && !stderr.contains("passphrase"),
+        "{test_name} requested a password: {stderr}"
+    );
+    false
+}
+
 fn socket_pair() -> (TcpStream, StdTcpStream) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
@@ -53,6 +174,38 @@ fn send_urgent_byte(peer: &StdTcpStream) {
         socket2::SockRef::from(peer).send_out_of_band(b"!").unwrap(),
         1
     );
+}
+
+#[test]
+fn identity_debug_redacts_secrets_in_owned_and_borrowed_configs() {
+    for (identity, expected) in [
+        (
+            OwnedIdentity::PKCS12 {
+                der: b"secret bundle".to_vec(),
+                password: "secret password".into(),
+            },
+            "PKCS12 { .. }",
+        ),
+        (
+            OwnedIdentity::PKCS8 {
+                pem: b"certificate".to_vec(),
+                key: b"secret key".to_vec(),
+            },
+            "PKCS8 { .. }",
+        ),
+    ] {
+        assert_eq!(format!("{identity:?}"), expected);
+        assert_eq!(format!("{:?}", identity.as_ref()), expected);
+        let config = OwnedTLSConfig {
+            identity: Some(identity),
+            cert_chain: None,
+        };
+        for output in [format!("{config:?}"), format!("{:?}", config.as_ref())] {
+            assert!(output.contains(expected));
+            assert!(!output.contains("secret"));
+            assert!(!output.contains("115, 101, 99, 114, 101, 116"));
+        }
+    }
 }
 
 #[test]
@@ -414,4 +567,92 @@ fn failed_connection_stays_failed_after_its_error_is_retrieved() {
         },
     );
     assert!(stream.try_connect().is_err());
+}
+
+#[cfg(feature = "native-tls")]
+#[test]
+fn native_tls_rejects_nul_in_domain_without_panicking() {
+    let connector = NativeTlsConnector::new().unwrap();
+    let (stream, _peer) = socket_pair();
+    let result = stream.into_native_tls(&connector, "localhost\0.invalid");
+    assert!(
+        matches!(result, Err(HandshakeError::Failure(error)) if error.kind() == io::ErrorKind::InvalidInput)
+    );
+}
+
+#[cfg(feature = "openssl")]
+#[test]
+fn openssl_rejects_nul_in_domain_without_panicking() {
+    let connector = OpensslConnector::builder(OpensslMethod::tls())
+        .unwrap()
+        .build();
+    let (stream, _peer) = socket_pair();
+    let result = stream.into_openssl(&connector, "localhost\0.invalid");
+    assert!(
+        matches!(result, Err(HandshakeError::Failure(error)) if error.kind() == io::ErrorKind::InvalidInput)
+    );
+}
+
+#[cfg(any(feature = "native-tls-futures", feature = "openssl-futures"))]
+mod asynchronous {
+    use super::*;
+    use futures_io::{AsyncRead, AsyncWrite};
+    use std::{
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    struct NoDebug;
+
+    impl AsyncRead for NoDebug {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            _: &mut [u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Ok(0))
+        }
+    }
+
+    impl AsyncWrite for NoDebug {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            data: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Ok(data.len()))
+        }
+        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[cfg(feature = "native-tls-futures")]
+    #[test]
+    fn native_tls_rejects_nul_in_domain_before_async_io() {
+        let result = poll_once(
+            AsyncTcpStream::Plain(NoDebug)
+                .into_native_tls(NativeTlsConnector::builder(), "localhost\0.invalid"),
+        );
+        assert!(
+            matches!(result, Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::InvalidInput)
+        );
+    }
+
+    #[cfg(feature = "openssl-futures")]
+    #[test]
+    fn openssl_rejects_nul_in_domain_before_async_io() {
+        let connector = OpensslConnector::builder(OpensslMethod::tls())
+            .unwrap()
+            .build();
+        let result = poll_once(
+            AsyncTcpStream::Plain(NoDebug).into_openssl(&connector, "localhost\0.invalid"),
+        );
+        assert!(
+            matches!(result, Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::InvalidInput)
+        );
+    }
 }
