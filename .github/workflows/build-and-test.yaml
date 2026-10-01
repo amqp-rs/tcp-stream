@@ -35,3 +35,27 @@ jobs:
       - uses: amqp-rs/actions/build@main
         with:
           rust: ${{ matrix.rust }}
+          test: 'false'
+      - name: Run tests for each TLS backend and runtime
+        shell: bash
+        run: |
+          failed=0
+          if ! cargo test --locked --no-fail-fast; then
+            failed=1
+          fi
+          for features in \
+            "" \
+            "futures" \
+            "native-tls-futures,tokio" \
+            "openssl-futures,smol" \
+            "rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor"
+          do
+            test_args=(--locked --no-fail-fast --no-default-features)
+            if [[ -n "$features" ]]; then
+              test_args+=(--features "$features")
+            fi
+            if ! cargo test "${test_args[@]}"; then
+              failed=1
+            fi
+          done
+          exit "$failed"

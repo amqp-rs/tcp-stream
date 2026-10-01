@@ -152,7 +152,23 @@ Identity `Debug` output redacts the certificate bundle, private key, and passwor
 
 ## Tests
 
-Tests use local listeners and test certificates. Run `cargo test --locked` for
-the default backend or select a backend and runtime with `--no-default-features`
-and `--features`. TLS regressions check handshakes, hostname verification, and
-rejection of valid unrelated trust roots without external network access.
+Tests use local listeners and test certificates. To exercise each TLS backend
+and async runtime, run:
+
+```sh
+cargo test --locked
+cargo test --locked --no-default-features
+cargo test --locked --no-default-features --features futures
+cargo test --locked --no-default-features --features native-tls-futures,tokio
+cargo test --locked --no-default-features --features openssl-futures,smol
+cargo test --locked --no-default-features --features rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor
+```
+
+CI runs these configurations individually. Regression tests cover raw socket
+readiness, TLS hostname and trust-root rejection, incomplete client identities,
+NUL input rejection, and noninteractive encrypted-key errors. Async OpenSSL tests
+exercise cancelled writes, reader/writer wakeups, accepted output sent through
+read, flush, and close, and preconfigured streams. Encrypted-key
+regressions run in child processes with a five-second watchdog, including Native
+TLS's legacy encryption, mislabeled encrypted DER, extra PEM objects, and async
+upgrade.

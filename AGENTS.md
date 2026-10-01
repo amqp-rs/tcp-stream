@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 cargo build                                              # build
 cargo test                                               # run tests
+cargo test --no-default-features                         # test the plaintext-only build
 cargo check --all --bins --examples --tests --all-features  # check all feature combinations
 cargo clippy --all-features -- -W clippy::all            # lint (CI standard)
 cargo fmt --all                                          # format
@@ -202,6 +203,12 @@ the PKCS#12 identity for portability across its platforms. Documentation example
 are compile-only and do not require external network access. Exercise default,
 no-default, and individual backend `-futures` builds when changing feature dispatch.
 
+CI retains the shared action's compile checks and runs default, plaintext,
+futures-only, Native TLS/Tokio, OpenSSL/smol, and rustls/async-global-executor tests
+separately. Run every configuration, and every test target with `--no-fail-fast`,
+even after a test failure, then fail the job
+if any configuration failed. TLS verification tests use a valid unrelated root
+to ensure certificate rejection is exercised after successful configuration.
 Async OpenSSL requires async-openssl 0.2.12, which buffers OpenSSL's output:
 the `buffered_writes` tests check that accepted bytes survive cancellation, that
 a Pending write accepts none of its input, and that readers and writers keep their
