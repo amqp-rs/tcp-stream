@@ -43,6 +43,14 @@ rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--r
 [dependencies]
 cfg-if = "^1.0"
 
+# rustix does not build on the excluded Unix targets: keep this list in sync with
+# the socket check selection in src/lib.rs.
+[target.'cfg(all(unix, not(any(target_os = "nuttx", target_os = "qnx", target_os = "rtems", target_os = "vxworks"))))'.dependencies]
+rustix = { version = "^1.1", features = ["event", "net"] }
+
+[target.'cfg(any(windows, target_os = "wasi"))'.dependencies]
+rustix = { version = "^1.1", features = ["event"] }
+
 [dependencies.async-native-tls]
 version = "^0.6"
 default-features = false
@@ -87,3 +95,11 @@ features         = ["std"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[target.'cfg(any(unix, windows))'.dev-dependencies]
+socket2 = "^0.6"
+
+# The socket check selection excludes the `qnx` target OS, which older
+# toolchains do not list.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("qnx"))'] }

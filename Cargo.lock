@@ -2012,8 +2012,10 @@ dependencies = [
  "native-tls",
  "openssl",
  "p12-keystore",
+ "rustix",
  "rustls-connector",
  "rustls-pki-types",
+ "socket2",
 ]
 
 [[package]]

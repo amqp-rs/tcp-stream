@@ -59,48 +59,25 @@
 //!
 //! To connect to a remote server:
 //!
-//! ```rust
-//! use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
+//! ```no_run
+//! use tcp_stream::{TcpStream, TLSConfig};
 //!
-//! use std::io::{self, Read, Write};
+//! use std::io::{Read, Write};
 //!
-//! let mut stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
-//! stream.set_nonblocking(true).unwrap();
-//!
-//! loop {
-//!     if stream.try_connect().unwrap() {
-//!         break;
-//!     }
-//! }
-//!
-//! let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default());
-//!
-//! while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
-//!     stream = mid_handshake.handshake();
-//! }
-//!
-//! let mut stream = stream.unwrap();
-//!
-//! while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
-//!     if err.kind() != io::ErrorKind::WouldBlock {
-//!         panic!("error: {:?}", err);
-//!     }
-//! }
-//!
-//! while let Err(err) = stream.flush() {
-//!     if err.kind() != io::ErrorKind::WouldBlock {
-//!         panic!("error: {:?}", err);
-//!     }
-//! }
+//! let stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
+//! let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default()).unwrap();
+//! stream.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+//! stream.flush().unwrap();
 //!
 //! let mut res = vec![];
-//! while let Err(err) = stream.read_to_end(&mut res) {
-//!     if err.kind() != io::ErrorKind::WouldBlock {
-//!         panic!("stream error: {:?}", err);
-//!     }
-//! }
+//! stream.read_to_end(&mut res).unwrap();
 //! println!("{}", String::from_utf8_lossy(&res));
 //! ```
+//!
+//! For nonblocking streams, wait for readiness between handshake retries. When
+//! writing, use `write()` and keep the unsent suffix after each successful partial
+//! write. Retrying an entire `write_all()` after `WouldBlock` can duplicate bytes
+//! that were already sent.
 
 use cfg_if::cfg_if;
 use std::{
@@ -270,6 +247,8 @@ impl TcpStream {
     }
 
     /// Wrapper around `std::net::TcpStream::connect_timeout`
+    ///
+    /// Each resolved address is tried in turn with the full timeout.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
         connect_std(addr, Some(timeout)).and_then(Self::try_from)
     }
@@ -279,12 +258,36 @@ impl TcpStream {
         Self::try_from(stream)
     }
 
-    /// Attempt reading from underlying stream, returning Ok(()) if the stream is readable
+    /// Check the underlying TCP socket without blocking or consuming data.
+    ///
+    /// Returns `Ok(())` if it is readable, including EOF, or `WouldBlock` if it
+    /// is not. A pending socket error is returned once no data precedes it, as
+    /// the next read would return it. Linux and Windows clear it then; other
+    /// systems, such as macOS, keep it for that read.
+    /// Readiness is a snapshot; a later read can still block. Queued error
+    /// notifications, such as transmit timestamps, do not count as readable.
+    /// Urgent data counts as readable only when `SO_OOBINLINE` is enabled. On
+    /// Windows, a socket whose read side was shut down locally reports
+    /// `WouldBlock`, although a read returns EOF.
+    /// This checks raw socket readiness, including for TLS streams; it does not
+    /// account for plaintext already buffered by the TLS backend. Targets without
+    /// socket polling support use a zero-length read instead, which can block a
+    /// blocking socket and report readiness without data.
     pub fn is_readable(&self) -> io::Result<()> {
-        self.deref().read(&mut []).map(|_| ())
+        is_readable(self.deref())
     }
 
-    /// Attempt writing to underlying stream, returning Ok(()) if the stream is writable
+    /// Check the underlying TCP socket without blocking.
+    ///
+    /// Returns `Ok(())` if it is writable or `WouldBlock` if it is not. A pending
+    /// socket error is returned, and retrieving it clears it, so a later read can
+    /// then report EOF instead. Readiness is a snapshot; a later write can still
+    /// block. This checks the raw socket, including for TLS streams, and returns
+    /// `BrokenPipe` once the local side can no longer send; on Windows, a reset
+    /// connection keeps returning its reset error instead. On a blocking TCP Fast
+    /// Open socket that deferred its handshake, the check starts the handshake
+    /// and waits for it. Targets without socket polling support use a zero-length
+    /// write, which cannot detect a full send buffer.
     pub fn is_writable(&self) -> io::Result<()> {
         is_writable(self.deref())
     }
@@ -373,20 +376,72 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
     }
 }
 
-fn try_connect(stream: &mut StdTcpStream) -> io::Result<bool> {
-    match is_writable(stream) {
+// The socket checks use rustix, which does not build on some Unix targets.
+// Those keep zero-length probes, as do targets without rustix support.
+cfg_if! {
+    if #[cfg(any(
+        all(
+            unix,
+            not(any(
+                target_os = "nuttx",
+                target_os = "qnx",
+                target_os = "rtems",
+                target_os = "vxworks"
+            ))
+        ),
+        windows,
+        target_os = "wasi"
+    ))] {
+        mod rustix_checks;
+        use rustix_checks::{handshake_started, is_readable, is_writable, try_connect};
+    } else {
+        mod probe_checks;
+        use probe_checks::{handshake_started, is_readable, is_writable, try_connect};
+    }
+}
+
+/// Write zero bytes, which sends nothing but fails after a local write shutdown
+/// or with a pending socket error. On a TCP Fast Open socket that deferred its
+/// handshake, it starts the handshake, and waits for it on a blocking socket.
+fn write_probe(mut stream: &StdTcpStream) -> io::Result<()> {
+    let result = stream.write(&[]).map(drop);
+    #[cfg(windows)]
+    return result.map_err(shutdown_as_broken_pipe);
+    #[cfg(not(windows))]
+    result
+}
+
+/// Report the `WSAESHUTDOWN` of a local write shutdown as `BrokenPipe`, which
+/// older standard libraries do not.
+#[cfg(windows)]
+fn shutdown_as_broken_pipe(err: io::Error) -> io::Error {
+    const WSAESHUTDOWN: i32 = rustix::io::Errno::SHUTDOWN.raw_os_error();
+    if err.raw_os_error() == Some(WSAESHUTDOWN) && err.kind() != io::ErrorKind::BrokenPipe {
+        io::Error::new(io::ErrorKind::BrokenPipe, err)
+    } else {
+        err
+    }
+}
+
+/// Check a connection with a zero-length write, which fails while it is
+/// pending or after it failed. Use it only where the socket cannot be polled or
+/// does not report its peer: it does not distinguish a full send buffer from a
+/// pending connection.
+fn probe_connection(stream: &StdTcpStream) -> io::Result<bool> {
+    match write_probe(stream) {
         Ok(()) => Ok(true),
-        Err(err)
-            if [io::ErrorKind::WouldBlock, io::ErrorKind::NotConnected].contains(&err.kind()) =>
-        {
-            Ok(false)
-        }
+        Err(err) if connection_in_progress(&err) => Ok(false),
         Err(err) => Err(err),
     }
 }
 
-fn is_writable(mut stream: &StdTcpStream) -> io::Result<()> {
-    stream.write(&[]).map(|_| ())
+/// Whether a write failed only because the connection is not established yet.
+fn connection_in_progress(err: &io::Error) -> bool {
+    handshake_started(err)
+        || matches!(
+            err.kind(),
+            io::ErrorKind::WouldBlock | io::ErrorKind::NotConnected
+        )
 }
 
 fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
@@ -619,3 +674,6 @@ impl From<io::Error> for HandshakeError {
 }
 
 mod sys;
+
+#[cfg(test)]
+mod tests;

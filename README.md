@@ -60,32 +60,30 @@ are provided when the `futures` feature is enabled.
 To connect to a remote server:
 
 ```rust
-use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
+use tcp_stream::{TcpStream, TLSConfig};
 
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 
 fn main() {
-    let stream = TcpStream::connect("google.com:443").unwrap();
-    let mut stream = stream.into_tls("google.com", TLSConfig::default());
-
-    while let Err(HandshakeError::WouldBlock(mid_handshake)) = stream {
-        stream = mid_handshake.handshake();
-    }
-
-    let mut stream = stream.unwrap();
-
-    while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
-        if err.kind() != io::ErrorKind::WouldBlock {
-            panic!("error: {:?}", err);
-        }
-    }
+    let stream = TcpStream::connect("www.rust-lang.org:443").unwrap();
+    let mut stream = stream.into_tls("www.rust-lang.org", TLSConfig::default()).unwrap();
+    stream.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
     stream.flush().unwrap();
     let mut res = vec![];
-    while let Err(err) = stream.read_to_end(&mut res) {
-        if err.kind() != io::ErrorKind::WouldBlock {
-            panic!("stream error: {:?}", err);
-        }
-    }
+    stream.read_to_end(&mut res).unwrap();
     println!("{}", String::from_utf8_lossy(&res));
 }
 ```
+
+For nonblocking streams, wait for readiness between handshake retries. Use
+`write()` and keep the unsent suffix after each partial write; retrying the whole
+buffer after `write_all()` returns `WouldBlock` can duplicate bytes already sent.
+The readiness helpers check the raw TCP socket, so `is_readable()` does not account
+for plaintext buffered by a TLS backend. Both helpers preserve application data and
+do not block, except that `is_writable()` starts and waits for the deferred
+handshake of a blocking TCP Fast Open socket. On targets without socket polling support, they fall back to
+zero-length reads and writes, which can report readiness too early, and the read
+can block a blocking socket.
+Urgent data counts as readable only when `SO_OOBINLINE` is enabled.
+
+`connect_timeout()` tries each resolved address in turn with the full timeout.
