@@ -59,7 +59,11 @@
 //!
 //! To connect to a remote server:
 //!
-//! ```rust
+//! This example is compiled but not run: it needs network access, and which
+//! TLS backend (if any) is available depends on the enabled features. See the
+//! crate's test suite for runnable equivalents.
+//!
+//! ```rust,no_run
 //! use tcp_stream::{HandshakeError, TcpStream, TLSConfig};
 //!
 //! use std::io::{self, Read, Write};
@@ -81,9 +85,18 @@
 //!
 //! let mut stream = stream.unwrap();
 //!
-//! while let Err(err) = stream.write_all(b"GET / HTTP/1.0\r\n\r\n") {
-//!     if err.kind() != io::ErrorKind::WouldBlock {
-//!         panic!("error: {:?}", err);
+//! // On a non-blocking stream a write can report `WouldBlock` after having
+//! // already written part of the buffer, so track the offset rather than
+//! // retrying `write_all` with the whole buffer (which would resend the
+//! // prefix that already made it out).
+//! let request = b"GET / HTTP/1.0\r\n\r\n";
+//! let mut written = 0;
+//! while written < request.len() {
+//!     match stream.write(&request[written..]) {
+//!         Ok(0) => panic!("connection closed by peer"),
+//!         Ok(n) => written += n,
+//!         Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
+//!         Err(err) => panic!("error: {:?}", err),
 //!     }
 //! }
 //!
@@ -179,20 +192,34 @@ pub enum TcpStream {
 }
 
 /// Holds extra TLS configuration
+///
+/// The `Debug` implementation of [`Identity`] redacts secrets, so logging a
+/// `TLSConfig` will not expose a private key or a PKCS#12 password.
 #[derive(Default, Debug, PartialEq)]
 pub struct TLSConfig<'data, 'key, 'chain> {
     /// Use for client certificate authentication
     pub identity: Option<Identity<'data, 'key>>,
-    /// The custom certificates chain in PEM format
+    /// Extra trusted certificates in PEM format
+    ///
+    /// These are **added to** the trust store the selected backend already
+    /// uses (the platform or webpki roots); they do not replace it. All
+    /// certificates found in the PEM blob are added.
     pub cert_chain: Option<&'chain str>,
 }
 
 /// Holds extra TLS configuration
+///
+/// The `Debug` implementation of [`OwnedIdentity`] redacts secrets, so logging
+/// an `OwnedTLSConfig` will not expose a private key or a PKCS#12 password.
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct OwnedTLSConfig {
     /// Use for client certificate authentication
     pub identity: Option<OwnedIdentity>,
-    /// The custom certificates chain in PEM format
+    /// Extra trusted certificates in PEM format
+    ///
+    /// These are **added to** the trust store the selected backend already
+    /// uses (the platform or webpki roots); they do not replace it. All
+    /// certificates found in the PEM blob are added.
     pub cert_chain: Option<String>,
 }
 
@@ -210,7 +237,11 @@ impl OwnedTLSConfig {
 /// Holds one of:
 /// - PKCS#12 DER-encoded identity and decryption password
 /// - PKCS#8 PEM-encoded certificate and key (without decryption password)
-#[derive(Debug, PartialEq)]
+///
+/// The `Debug` implementation deliberately redacts every field so that key
+/// material and passwords are never written to logs; only the variant and the
+/// length of each field are reported.
+#[derive(PartialEq)]
 pub enum Identity<'data, 'key> {
     /// PKCS#12 DER-encoded identity with decryption password
     PKCS12 {
@@ -231,7 +262,11 @@ pub enum Identity<'data, 'key> {
 /// Holds one of:
 /// - PKCS#12 DER-encoded identity and decryption password
 /// - PKCS#8 PEM-encoded certificate and key (without decryption password)
-#[derive(Clone, Debug, PartialEq)]
+///
+/// The `Debug` implementation deliberately redacts every field so that key
+/// material and passwords are never written to logs; only the variant and the
+/// length of each field are reported.
+#[derive(Clone, PartialEq)]
 pub enum OwnedIdentity {
     /// PKCS#12 DER-encoded identity with decryption password
     PKCS12 {
@@ -260,21 +295,67 @@ impl OwnedIdentity {
     }
 }
 
+/// Stands in for a secret in `Debug` output, reporting only its length.
+struct Redacted(usize);
+
+impl fmt::Debug for Redacted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("<redacted, {} bytes>", self.0))
+    }
+}
+
+/// Formats an identity without ever revealing key material or passwords.
+fn fmt_identity(f: &mut fmt::Formatter<'_>, identity: &Identity<'_, '_>) -> fmt::Result {
+    match identity {
+        Identity::PKCS12 { der, password } => f
+            .debug_struct("PKCS12")
+            .field("der", &Redacted(der.len()))
+            .field("password", &Redacted(password.len()))
+            .finish(),
+        Identity::PKCS8 { pem, key } => f
+            .debug_struct("PKCS8")
+            .field("pem", &Redacted(pem.len()))
+            .field("key", &Redacted(key.len()))
+            .finish(),
+    }
+}
+
+impl fmt::Debug for Identity<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt_identity(f, self)
+    }
+}
+
+impl fmt::Debug for OwnedIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt_identity(f, &self.as_ref())
+    }
+}
+
 /// Holds either the TLS `TcpStream` result or the current handshake state
 pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 
 impl TcpStream {
     /// Wrapper around `std::net::TcpStream::connect`
+    ///
+    /// Note that, like every other constructor of this type, this enables
+    /// `TCP_NODELAY` on the resulting socket.
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
         connect_std(addr, None).and_then(Self::try_from)
     }
 
     /// Wrapper around `std::net::TcpStream::connect_timeout`
+    ///
+    /// Note that, like every other constructor of this type, this enables
+    /// `TCP_NODELAY` on the resulting socket.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
         connect_std(addr, Some(timeout)).and_then(Self::try_from)
     }
 
     /// Convert from a `std::net::TcpStream`
+    ///
+    /// Note that this enables `TCP_NODELAY` on the given socket, overriding
+    /// whatever the caller may have configured.
     pub fn from_std(stream: StdTcpStream) -> io::Result<Self> {
         Self::try_from(stream)
     }
@@ -304,6 +385,12 @@ impl TcpStream {
     /// as alternatives). Use [`into_rustls`](Self::into_rustls),
     /// `into_native_tls`, or `into_openssl` to
     /// target a specific backend explicitly.
+    ///
+    /// # Errors
+    ///
+    /// If the crate was built without any TLS backend feature, this fails with
+    /// [`io::ErrorKind::Unsupported`] rather than silently handing back an
+    /// unencrypted stream.
     pub fn into_tls(
         self,
         domain: &str,
@@ -342,7 +429,8 @@ impl TcpStream {
         Ok(connector.connect(domain, self.into_plain()?)?.into())
     }
 
-    #[allow(irrefutable_let_patterns)]
+    // `dead_code`: unused when the crate is built without any TLS backend.
+    #[allow(irrefutable_let_patterns, dead_code)]
     fn into_plain(self) -> Result<StdTcpStream, io::Error> {
         if let Self::Plain(plain) = self {
             Ok(plain)
@@ -362,6 +450,10 @@ fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Resu
         for addr in addrs {
             match StdTcpStream::connect_timeout(&addr, timeout) {
                 Ok(stream) => return Ok(stream),
+                // Keep the last failure, which is what `std::net::TcpStream`
+                // reports when it walks several addresses itself. The
+                // timeout-free branch below delegates straight to std, so
+                // matching it keeps the two paths consistent.
                 Err(error) => err = Some(error),
             }
         }
@@ -398,8 +490,14 @@ fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> H
         } else if #[cfg(feature = "native-tls")] {
             into_native_tls_impl(s, domain, config)
         } else {
-            let _ = (domain, config);
-            Ok(TcpStream::Plain(s.into_plain()?))
+            let _ = (s, domain, config);
+            // Returning the plain stream here would silently downgrade a
+            // connection the caller asked to encrypt, so refuse instead.
+            Err(HandshakeError::Failure(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "no TLS backend enabled: build tcp-stream with one of the \
+                 `rustls`, `openssl` or `native-tls` features",
+            )))
         }
     }
 }
@@ -619,3 +717,112 @@ impl From<io::Error> for HandshakeError {
 }
 
 mod sys;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpListener;
+
+    /// Serves one connection, echoing everything back.
+    fn echo_server() -> io::Result<(std::net::SocketAddr, std::thread::JoinHandle<()>)> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let addr = listener.local_addr()?;
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut socket, _)) = listener.accept() {
+                let mut buf = [0; 64];
+                while let Ok(read) = socket.read(&mut buf) {
+                    if read == 0 || socket.write_all(&buf[..read]).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        Ok((addr, handle))
+    }
+
+    #[test]
+    fn plain_stream_round_trip() {
+        let (addr, server) = echo_server().unwrap();
+        let mut stream = TcpStream::connect(addr).unwrap();
+        assert!(stream.is_writable().is_ok());
+        assert!(stream.try_connect().unwrap());
+
+        stream.write_all(b"hello").unwrap();
+        stream.flush().unwrap();
+        let mut buf = [0; 5];
+        stream.read_exact(&mut buf).unwrap();
+        assert_eq!(&buf, b"hello");
+
+        drop(stream);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn constructors_enable_nodelay() {
+        let (addr, server) = echo_server().unwrap();
+        let stream = TcpStream::connect(addr).unwrap();
+        assert!(stream.nodelay().unwrap());
+        drop(stream);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn into_plain_unwraps_a_plain_stream() {
+        let (addr, server) = echo_server().unwrap();
+        let stream = TcpStream::connect(addr).unwrap();
+        assert!(stream.into_plain().is_ok());
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn identity_debug_redacts_secrets() {
+        const PASSWORD: &str = "correct-horse-battery-staple";
+        const KEY: &[u8] = b"-----BEGIN PRIVATE KEY-----aaaa-----END PRIVATE KEY-----";
+
+        let pkcs12 = TLSConfig {
+            identity: Some(Identity::PKCS12 {
+                der: b"pkcs12-bundle",
+                password: PASSWORD,
+            }),
+            cert_chain: None,
+        };
+        let rendered = format!("{pkcs12:?}");
+        assert!(
+            !rendered.contains(PASSWORD),
+            "password leaked into Debug output: {rendered}",
+        );
+        assert!(rendered.contains("<redacted, 28 bytes>"), "{rendered}");
+
+        let pkcs8 = OwnedTLSConfig {
+            identity: Some(OwnedIdentity::PKCS8 {
+                pem: b"certificate".to_vec(),
+                key: KEY.to_vec(),
+            }),
+            cert_chain: None,
+        };
+        let rendered = format!("{pkcs8:?}");
+        for byte in KEY.windows(8) {
+            assert!(
+                !rendered.contains(&String::from_utf8_lossy(byte).to_string()),
+                "key material leaked into Debug output: {rendered}",
+            );
+        }
+        assert!(rendered.contains("<redacted, 56 bytes>"), "{rendered}");
+    }
+
+    /// Without a TLS backend, `into_tls` must refuse rather than quietly hand
+    /// back an unencrypted stream.
+    #[test]
+    #[cfg(not(any(feature = "rustls", feature = "openssl", feature = "native-tls")))]
+    fn into_tls_without_a_backend_is_unsupported() {
+        let (addr, server) = echo_server().unwrap();
+        let stream = TcpStream::connect(addr).unwrap();
+        let err = match stream.into_tls("localhost", TLSConfig::default()) {
+            Err(HandshakeError::Failure(err)) => err,
+            Ok(_) => panic!("into_tls silently returned an unencrypted stream"),
+            Err(err) => panic!("unexpected error: {err:?}"),
+        };
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+        server.join().unwrap();
+    }
+}

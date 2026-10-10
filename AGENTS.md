@@ -40,7 +40,9 @@ The same pattern is repeated for `MidHandshakeTlsStream` (non-blocking handshake
 
 ### Feature flags
 
-The `into_tls()` / `into_tls_impl()` method selects a backend at compile time via `cfg_if!` in priority order: `rustls-platform-verifier` → `rustls-native-certs` → `rustls-webpki-roots-certs` → `rustls` → `openssl` → `native-tls`.
+The `into_tls()` / `into_tls_impl()` method selects a backend at compile time via `cfg_if!` in priority order: `rustls` → `openssl` → `native-tls`. With no backend enabled it fails with `io::ErrorKind::Unsupported` rather than returning an unencrypted stream.
+
+Independently, `select_connector_config()` in `src/rustls_impl.rs` picks the rustls trust store, also via `cfg_if!`, in priority order: `rustls-platform-verifier` → `rustls-native-certs` → `rustls-webpki-roots-certs` → `RustlsConnectorConfig::default()`.
 
 Async runtime is selected via the `async-rs` crate: `tokio` (default), `smol`, or `async-global-executor`. The `-futures` suffix feature variants (`rustls-futures`, `native-tls-futures`, `openssl-futures`) enable async TLS for those backends.
 

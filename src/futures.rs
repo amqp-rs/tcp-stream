@@ -33,16 +33,25 @@ pub enum AsyncTcpStream<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     Rustls(RustlsAsyncStream<S>),
 }
 
-impl<S: AsyncRead + AsyncWrite + fmt::Debug + Send + Unpin + 'static> fmt::Debug
-    for AsyncTcpStream<S>
-{
+impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> fmt::Debug for AsyncTcpStream<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AsyncTcpStream").finish_non_exhaustive()
+        let backend = match self {
+            Self::Plain(_) => "plain",
+            #[cfg(feature = "native-tls-futures")]
+            Self::NativeTls(_) => "native-tls",
+            #[cfg(feature = "openssl-futures")]
+            Self::Openssl(_) => "openssl",
+            #[cfg(feature = "rustls-futures")]
+            Self::Rustls(_) => "rustls",
+        };
+        f.debug_struct("AsyncTcpStream")
+            .field("backend", &backend)
+            .finish_non_exhaustive()
     }
 }
 
 impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
-    /// Wrapper around `reactor_trait::TcpReactor::connect`
+    /// Wrapper around `async_rs::traits::Reactor::tcp_connect`
     pub async fn connect<R: Reactor<TcpStream = S> + Sync, A: AsyncToSocketAddrs + Send>(
         reactor: &R,
         addr: A,
@@ -55,6 +64,13 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     /// Unlike the synchronous [`TcpStream::into_tls`](crate::TcpStream::into_tls), this completes the full handshake
     /// asynchronously and returns `io::Result<Self>` directly — there is no
     /// mid-handshake state to retry.
+    ///
+    /// # Errors
+    ///
+    /// If the crate was built without any of the `rustls-futures`,
+    /// `openssl-futures` or `native-tls-futures` features, this fails with
+    /// [`io::ErrorKind::Unsupported`] rather than silently handing back an
+    /// unencrypted stream.
     pub async fn into_tls(self, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<Self> {
         into_tls_impl(self, domain, config).await
     }
@@ -126,8 +142,14 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
         } else if #[cfg(feature = "native-tls-futures")] {
             crate::into_native_tls_impl_async(s, domain, config).await
         } else {
-            let _ = (domain, config);
-            Ok(AsyncTcpStream::Plain(s.into_plain()?))
+            let _ = (s, domain, config);
+            // Returning the plain stream here would silently downgrade a
+            // connection the caller asked to encrypt, so refuse instead.
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "no async TLS backend enabled: build tcp-stream with one of the \
+                 `rustls-futures`, `openssl-futures` or `native-tls-futures` features",
+            ))
         }
     }
 }
