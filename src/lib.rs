@@ -597,6 +597,7 @@ impl fmt::Debug for TcpStream {
 
 /// A TLS stream which has been interrupted during the handshake
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum MidHandshakeTlsStream {
     /// Not a TLS stream
     Plain(TcpStream),
@@ -675,6 +676,7 @@ impl fmt::Display for MidHandshakeTlsStream {
 
 /// An error returned while performing the handshake
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum HandshakeError {
     /// We hit WouldBlock during handshake
     WouldBlock(MidHandshakeTlsStream),
