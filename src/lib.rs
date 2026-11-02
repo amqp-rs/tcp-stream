@@ -65,12 +65,18 @@
 //! With several store features enabled, rustls uses the first one listed above,
 //! so another store needs default features disabled.
 //!
-//! ## Rustls crypto provider (at least one must be enabled)
+//! ## Rustls crypto provider (one is used, see below)
 //!
 //! | Flag | Notes |
 //! |------|-------|
 //! | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
 //! | `rustls--ring` | Uses ring (more portable) |
+//!
+//! Without either feature, install a process-level rustls crypto provider before
+//! connecting. Otherwise, rustls-connector uses the provider that rustls selects
+//! from its own crate features, which other crates may enable, and panics if rustls
+//! cannot select exactly one. A provider feature does not enable the `rustls`
+//! backend by itself.
 //!
 //! ## Miscellaneous
 //!

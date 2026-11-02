@@ -35,7 +35,9 @@ rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-root-certs"]
 rustls                    = ["dep:rustls-connector", "dep:p12-keystore", "dep:rustls-pki-types"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 
-# rustls crypto providers. Choose at least one. Otherwise, runtime errors.
+# rustls crypto providers. Without either, install a process-level provider before connecting;
+# otherwise rustls-connector uses the one rustls selects from its own features and panics if
+# rustls cannot select exactly one. These features do not enable the rustls backend by themselves.
 # See https://docs.rs/rustls/latest/rustls/#crate-features. for more info
 rustls--aws_lc_rs         = ["dep:rustls-connector", "rustls-connector/rustls--aws_lc_rs"] # default, but doesn't build everywhere
 rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--ring"] # more compatible, (e.g., easily builds on Windows)
@@ -90,7 +92,7 @@ features = ["std", "pem"]
 optional = true
 
 [dependencies.rustls-connector]
-version          = "^0.23"
+version          = "^0.23.10"
 optional         = true
 default-features = false
 

@@ -62,7 +62,10 @@ The plaintext fallback in `into_tls()` is intentional: without a matching TLS
 backend it returns `Plain` and ignores the TLS arguments, allowing the same
 downstream code across feature sets. Keep the warning in the public method docs.
 
-Rustls requires a crypto provider feature: `rustls--aws_lc_rs` (default) or `rustls--ring`.
+Rustls needs a crypto provider: the `rustls--aws_lc_rs` (default) or `rustls--ring` feature, or a
+process-level provider installed before connecting. Without either, the required
+rustls-connector 0.23.10 falls back to rustls's own selection from its crate features and
+panics unless rustls can select exactly one.
 
 ### TLS identity
 

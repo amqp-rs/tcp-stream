@@ -76,12 +76,19 @@ When multiple store features are enabled, the priority is
 `rustls-platform-verifier`, then `rustls-native-certs`, then
 `rustls-webpki-roots-certs`.
 
-### Rustls crypto provider (at least one required)
+### Rustls crypto provider (one is used, see below)
 
 | Flag | Notes |
 |------|-------|
 | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
 | `rustls--ring` | Uses ring (more portable, e.g. builds on Windows) |
+
+With neither provider feature, the application can install a rustls
+`CryptoProvider` as the process default before its first connection. Failing
+that, rustls picks a provider from its own crate features, which other
+dependencies may enable, and connecting panics unless exactly one is available.
+The provider features only choose a provider: with default features disabled,
+enable `rustls` as well, or `into_tls()` returns the plain stream.
 
 ### Miscellaneous
 
