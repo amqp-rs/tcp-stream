@@ -12,8 +12,8 @@
 //! Wraps `std::net::TcpStream` in a [`TcpStream`] enum that can be upgraded
 //! to a TLS-encrypted stream via [`TcpStream::into_tls`]. Supported backends
 //! are rustls (default), native-tls, and OpenSSL, selected through feature
-//! flags. Async variants of the encrypted stream are provided via the
-//! `futures-io` traits when the `futures` feature is enabled.
+//! flags. The `futures` feature provides `AsyncTcpStream` and its `futures-io`
+//! traits; async TLS additionally requires a matching backend feature.
 //!
 //! # Feature flags
 //!
@@ -25,13 +25,33 @@
 //! | `smol` | Uses the smol executor |
 //! | `async-global-executor` | Uses async-global-executor |
 //!
-//! ## TLS backend (pick at most one; `rustls` is the default)
+//! ## TLS backend (`rustls` is the default)
 //!
 //! | Flag | Notes |
 //! |------|-------|
 //! | `rustls` *(default)* | TLS via rustls |
 //! | `native-tls` | TLS via the platform's native library |
 //! | `openssl` | TLS via OpenSSL |
+//!
+//! When several backends are enabled, [`TcpStream::into_tls`] uses `rustls`, then
+//! `openssl`, then `native-tls`.
+//!
+//! ## Async TLS (`rustls-futures` is the default)
+//!
+//! | Flag | Notes |
+//! |------|-------|
+//! | `rustls-futures` *(default)* | Async TLS via rustls |
+//! | `native-tls-futures` | Async TLS via native-tls |
+//! | `openssl-futures` | Async TLS via OpenSSL |
+//!
+//! The `futures` feature alone only provides async I/O traits. The async
+//! `into_tls()` follows the same priority. As rustls is enabled by default,
+//! both `into_tls()` methods use another backend only when default features are
+//! disabled.
+//!
+//! **Warning:** when no matching TLS backend is enabled, `into_tls()` deliberately
+//! returns the plain stream without encryption and ignores its TLS configuration.
+//! This allows downstream code to use the same call with and without TLS features.
 //!
 //! ## Rustls certificate store (only when `rustls` is active)
 //!
@@ -42,6 +62,8 @@
 //! | `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
 //!
 //! Enable a certificate store or supply custom roots through [`TLSConfig::cert_chain`].
+//! With several store features enabled, rustls uses the first one listed above,
+//! so another store needs default features disabled.
 //!
 //! ## Rustls crypto provider (at least one must be enabled)
 //!
@@ -54,7 +76,7 @@
 //!
 //! | Flag | Notes |
 //! |------|-------|
-//! | `futures` | Enable `futures-io` async trait impls on the encrypted stream |
+//! | `futures` | Enable the async stream wrapper and `futures-io` traits |
 //! | `vendored-openssl` | Build a vendored OpenSSL (requires `openssl` feature) |
 //!
 //! # Example
@@ -381,10 +403,17 @@ impl TcpStream {
     /// Upgrade this plain stream to TLS, returning either a completed [`TcpStream`] or a
     /// [`HandshakeError::WouldBlock`] mid-handshake value that can be retried.
     ///
-    /// The TLS backend is selected by feature flag (rustls by default; native-tls or openssl
-    /// as alternatives). Use [`into_rustls`](Self::into_rustls),
-    /// `into_native_tls`, or `into_openssl` to
-    /// target a specific backend explicitly.
+    /// The TLS backend is selected by feature flag. When multiple backends are
+    /// enabled, the priority is `rustls`, then `openssl`, then `native-tls`.
+    /// `rustls` is a default feature, so selecting another backend here requires
+    /// disabling defaults. Use `into_rustls`, `into_native_tls`, or
+    /// `into_openssl` to target a specific backend explicitly.
+    ///
+    /// # Warning
+    ///
+    /// When no TLS backend feature is enabled, this deliberately returns the
+    /// plain stream without encryption and ignores `domain` and `config`. This
+    /// supports downstream code shared between TLS and plaintext builds.
     pub fn into_tls(
         self,
         domain: &str,
@@ -537,6 +566,7 @@ fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> H
         } else if #[cfg(feature = "native-tls")] {
             into_native_tls_impl(s, domain, config)
         } else {
+            // Intentional plaintext fallback for code shared across feature sets.
             let _ = (domain, config);
             Ok(TcpStream::Plain(s.into_plain()?))
         }

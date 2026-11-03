@@ -33,9 +33,7 @@ pub enum AsyncTcpStream<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     Rustls(RustlsAsyncStream<S>),
 }
 
-impl<S: AsyncRead + AsyncWrite + fmt::Debug + Send + Unpin + 'static> fmt::Debug
-    for AsyncTcpStream<S>
-{
+impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> fmt::Debug for AsyncTcpStream<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("AsyncTcpStream").finish_non_exhaustive()
     }
@@ -52,9 +50,21 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
 
     /// Upgrade this plain stream to TLS using the feature-selected backend (rustls by default).
     ///
+    /// When multiple async backends are enabled, the priority is `rustls-futures`,
+    /// then `openssl-futures`, then `native-tls-futures`. Use the backend-specific
+    /// upgrade methods to choose explicitly. `rustls-futures` is a default
+    /// feature, so selecting another backend here requires disabling defaults.
+    ///
     /// Unlike the synchronous [`TcpStream::into_tls`](crate::TcpStream::into_tls), this completes the full handshake
     /// asynchronously and returns `io::Result<Self>` directly — there is no
     /// mid-handshake state to retry.
+    ///
+    /// # Warning
+    ///
+    /// When no `rustls-futures`, `openssl-futures`, or `native-tls-futures`
+    /// feature is enabled, this deliberately returns the plain stream without
+    /// encryption and ignores `domain` and `config`. Enabling a synchronous
+    /// TLS backend alone does not enable async TLS.
     pub async fn into_tls(self, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<Self> {
         into_tls_impl(self, domain, config).await
     }
@@ -132,6 +142,7 @@ async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
         } else if #[cfg(feature = "native-tls-futures")] {
             crate::into_native_tls_impl_async(s, domain, config).await
         } else {
+            // Intentional plaintext fallback for code shared across feature sets.
             let _ = (domain, config);
             Ok(AsyncTcpStream::Plain(s.into_plain()?))
         }

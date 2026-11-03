@@ -25,13 +25,37 @@ are provided when the `futures` feature is enabled.
 | `smol` | Uses the smol executor |
 | `async-global-executor` | Uses async-global-executor |
 
-### TLS backend (pick at most one)
+### TLS backend
 
 | Flag | Notes |
 |------|-------|
 | `rustls` *(default)* | TLS via rustls |
 | `native-tls` | TLS via the platform's native library |
 | `openssl` | TLS via OpenSSL |
+
+### Async TLS
+
+| Flag | Notes |
+|------|-------|
+| `rustls-futures` *(default)* | Async TLS via rustls |
+| `native-tls-futures` | Async TLS via native-tls |
+| `openssl-futures` | Async TLS via OpenSSL |
+
+The `futures` feature enables async I/O traits. Async TLS also requires the
+matching `-futures` backend feature.
+
+When multiple backends are enabled, synchronous `into_tls()` chooses `rustls`,
+then `openssl`, then `native-tls`. The async method uses the same priority among
+the `-futures` features. Use the backend-specific upgrade methods to choose
+explicitly. Because `rustls` and `rustls-futures` are default features, an
+application that enables another backend must also disable default features for
+either `into_tls()` to use it.
+
+**Warning:** when no TLS backend is enabled, `TcpStream::into_tls()` deliberately
+returns the plain stream without encryption and ignores its TLS configuration.
+`AsyncTcpStream::into_tls()` does the same when no async TLS backend is enabled,
+even if a synchronous backend is present. This lets downstream code use the same
+call with and without TLS features.
 
 ### Rustls certificate store (when `rustls` is active)
 
@@ -63,7 +87,7 @@ When multiple store features are enabled, the priority is
 
 | Flag | Notes |
 |------|-------|
-| `futures` | Enable `futures-io` async trait impls on the encrypted stream |
+| `futures` | Enable the async stream wrapper and `futures-io` traits |
 | `vendored-openssl` | Build a vendored OpenSSL (requires `openssl` feature) |
 
 For client authentication with native-tls on Apple platforms other than macOS,

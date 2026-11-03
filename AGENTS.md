@@ -51,7 +51,15 @@ in priority order: `rustls` → `openssl` → `native-tls`. Rustls separately se
 its certificate store in order: `rustls-platform-verifier` → `rustls-native-certs`
 → `rustls-webpki-roots-certs` → custom roots only.
 
-Async runtime is selected via the `async-rs` crate: `tokio` (default), `smol`, or `async-global-executor`. The `-futures` suffix feature variants (`rustls-futures`, `native-tls-futures`, `openssl-futures`) enable async TLS for those backends.
+Async runtime is selected via `async-rs`: `tokio` (default), `smol`, or
+`async-global-executor`. Async TLS selects `rustls-futures` (default) →
+`openssl-futures` → `native-tls-futures`. The `futures` feature alone enables I/O
+traits without enabling async TLS. `rustls-futures` is a default feature, so the
+docs must tell users of another async backend to disable default features.
+
+The plaintext fallback in `into_tls()` is intentional: without a matching TLS
+backend it returns `Plain` and ignores the TLS arguments, allowing the same
+downstream code across feature sets. Keep the warning in the public method docs.
 
 Rustls requires a crypto provider feature: `rustls--aws_lc_rs` (default) or `rustls--ring`.
 

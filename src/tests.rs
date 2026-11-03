@@ -64,7 +64,11 @@ pub(super) fn check_pkcs12_rejections<T>(build: impl Fn(TLSConfig<'_, '_, '_>) -
 }
 
 /// Poll `future` once, with a waker that does nothing.
-#[cfg(any(feature = "native-tls-futures", feature = "openssl-futures"))]
+#[cfg(any(
+    feature = "native-tls-futures",
+    feature = "openssl-futures",
+    all(feature = "futures", not(feature = "rustls-futures"))
+))]
 pub(super) fn poll_once<F: Future>(future: F) -> std::task::Poll<F::Output> {
     std::pin::pin!(future).poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
 }
@@ -632,7 +636,26 @@ fn openssl_rejects_nul_in_domain_without_panicking() {
     );
 }
 
-#[cfg(any(feature = "native-tls-futures", feature = "openssl-futures"))]
+#[cfg(not(any(feature = "rustls", feature = "native-tls", feature = "openssl")))]
+#[test]
+fn tls_upgrade_without_a_backend_preserves_plaintext() {
+    let (stream, _peer) = socket_pair();
+    let stream = stream
+        .into_tls(
+            "ignored\0domain",
+            TLSConfig {
+                identity: Some(Identity::PKCS12 {
+                    der: &[],
+                    password: "ignored\0password",
+                }),
+                cert_chain: Some("ignored roots"),
+            },
+        )
+        .unwrap();
+    assert!(matches!(stream, TcpStream::Plain(_)));
+}
+
+#[cfg(feature = "futures")]
 mod asynchronous {
     use super::*;
     use futures_io::{AsyncRead, AsyncWrite};
@@ -669,6 +692,14 @@ mod asynchronous {
         }
     }
 
+    #[test]
+    fn stream_debug_does_not_require_inner_debug() {
+        assert_eq!(
+            format!("{:?}", AsyncTcpStream::Plain(NoDebug)),
+            "AsyncTcpStream { .. }"
+        );
+    }
+
     #[cfg(feature = "native-tls-futures")]
     #[test]
     fn native_tls_rejects_nul_in_domain_before_async_io() {
@@ -691,6 +722,26 @@ mod asynchronous {
         assert!(
             matches!(result, Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::InvalidInput)
         );
+    }
+
+    #[cfg(not(any(
+        feature = "rustls-futures",
+        feature = "native-tls-futures",
+        feature = "openssl-futures"
+    )))]
+    #[test]
+    fn tls_upgrade_without_an_async_backend_preserves_plaintext() {
+        let result = poll_once(AsyncTcpStream::Plain(NoDebug).into_tls(
+            "ignored\0domain",
+            TLSConfig {
+                identity: Some(Identity::PKCS12 {
+                    der: &[],
+                    password: "ignored\0password",
+                }),
+                cert_chain: Some("ignored roots"),
+            },
+        ));
+        assert!(matches!(result, Poll::Ready(Ok(AsyncTcpStream::Plain(_)))));
     }
 }
 
