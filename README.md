@@ -139,6 +139,13 @@ zero-length reads and writes, which can report readiness too early, and the read
 can block a blocking socket.
 Urgent data counts as readable only when `SO_OOBINLINE` is enabled.
 
+Async OpenSSL writes can accept up to 16 KiB into async-openssl's own buffer while
+the transport is busy. Flush or close the stream to send accepted bytes; reads send
+them too, without waiting for them. A write that returns `Pending` has accepted
+none of its input, so cancelling it cannot replace the next write's bytes. Async
+Native TLS does not buffer writes: after a write returns `Pending`, retry it with
+the same bytes instead of cancelling it.
+
 `connect_timeout()` tries each resolved address in turn with the full timeout.
 
 Identity `Debug` output redacts the certificate bundle, private key, and password.

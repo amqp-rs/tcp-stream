@@ -90,6 +90,8 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     #[cfg(feature = "openssl-futures")]
     /// Enable TLS using openssl
     ///
+    /// Writes can accept up to 16 KiB for later transmission, which async-openssl
+    /// buffers; flush or close the stream to send accepted bytes.
     /// A domain containing a NUL byte returns `InvalidInput`.
     pub async fn into_openssl(
         self,

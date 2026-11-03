@@ -58,7 +58,7 @@ features = ["runtime-smol"] # this feature name is bad. means async traits from 
 optional = true
 
 [dependencies.async-openssl]
-version = "^0.2"
+version = "^0.2.12"
 optional = true
 
 [dependencies.async-rs]

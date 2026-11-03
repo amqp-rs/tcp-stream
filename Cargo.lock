@@ -171,9 +171,9 @@ dependencies = [
 
 [[package]]
 name = "async-openssl"
-version = "0.2.11"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e15515e5f8672525ab94ca2281dca290a98e6a925b77917e8e4eb41d917994d"
+checksum = "2df8e1408f2f9b712ec12ccedd13debc0d242a20b2385a92e1c028bf51b7b6f4"
 dependencies = [
  "futures-io",
  "openssl",

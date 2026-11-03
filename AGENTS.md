@@ -40,9 +40,9 @@ The same pattern is repeated for `MidHandshakeTlsStream` (non-blocking handshake
 | `src/futures.rs` | `AsyncTcpStream<S>` — async version using `futures-io` traits, same multi-backend pattern |
 | `src/sys/unix.rs` | `AsFd`, `AsRawFd`, `FromRawFd` impls |
 | `src/sys/windows.rs` | Windows equivalents |
-| `src/tests.rs` | Socket and identity regression tests |
+| `src/tests.rs` | Socket, identity, and local TLS regression tests |
+| `src/tests/tls.rs` | Local TLS handshake, verification, and async OpenSSL write tests |
 | `tests/fixtures/` | Test certificate chain, root, and PKCS#8/PKCS#12 identities |
-| `src/tests/tls.rs` | Local TLS handshake and verification tests |
 
 ### Feature flags
 
@@ -202,8 +202,12 @@ the PKCS#12 identity for portability across its platforms. Documentation example
 are compile-only and do not require external network access. Exercise default,
 no-default, and individual backend `-futures` builds when changing feature dispatch.
 
-The Native
-TLS and OpenSSL encrypted-key regressions run in child processes with a
+Async OpenSSL requires async-openssl 0.2.12, which buffers OpenSSL's output:
+the `buffered_writes` tests check that accepted bytes survive cancellation, that
+a Pending write accepts none of its input, and that readers and writers keep their
+wakeups, for both `into_openssl` and preconfigured streams. Async Native TLS
+writes stay unbuffered on this release line.
+The Native TLS and OpenSSL encrypted-key regressions run in child processes with a
 five-second watchdog and reject terminal prompts. Native TLS covers legacy
 headers, mislabeled encrypted DER, trailing DER, and extra PEM objects, and tests
 that encrypted identities fail before async I/O starts. Assert the prepared key
