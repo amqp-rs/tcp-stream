@@ -50,6 +50,8 @@ fn rustls_identity(
 ) -> io::Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)> {
     let (certs, key) = match identity {
         Identity::PKCS12 { der, password } => {
+            // The 0.2 importer does not stop at certificate issuer cycles. Keep it
+            // until the newer parser's prerelease dependencies settle.
             let pfx =
                 p12_keystore::KeyStore::from_pkcs12(der, password).map_err(crate::invalid_data)?;
             let Some((_, keychain)) = pfx.private_key_chain() else {

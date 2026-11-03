@@ -132,6 +132,8 @@ Reject NUL bytes in Native TLS / OpenSSL domains and PKCS#12 passwords before
 passing them upstream; return `InvalidInput` with a message that excludes the
 input. Keep validation inside the selected backend so plaintext fallback still
 ignores the TLS arguments.
+Keep p12-keystore on 0.2 until the newer parser's prerelease dependencies are
+stable; do not upgrade the parser as part of unrelated fixes.
 
 ### Socket behavior and tests
 
@@ -209,6 +211,7 @@ separately. Run every configuration, and every test target with `--no-fail-fast`
 even after a test failure, then fail the job
 if any configuration failed. TLS verification tests use a valid unrelated root
 to ensure certificate rejection is exercised after successful configuration.
+Keep the cyclic PKCS#12 fixture for a future issuer-cycle regression test.
 Async OpenSSL requires async-openssl 0.2.12, which buffers OpenSSL's output:
 the `buffered_writes` tests check that accepted bytes survive cancellation, that
 a Pending write accepts none of its input, and that readers and writers keep their

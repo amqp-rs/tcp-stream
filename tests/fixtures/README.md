@@ -28,3 +28,10 @@ it to valid PEM inputs to verify that extra objects never reach the importer.
 
 `untrusted-root.pem` is a valid, unrelated trust anchor for certificate rejection
 tests. Its private key is not stored.
+
+`cyclic-identity.p12` uses the password `test password` and contains a deliberately
+invalid issuer chain: the leaf is issued by CA A, A by B, and B by A. Each
+certificate's signature is valid, but the chain has no terminating root. This
+fixture is retained for a future issuer-cycle regression test, which should import
+it in a child process with a memory limit and watchdog so a broken parser cannot
+exhaust the test runner's memory.

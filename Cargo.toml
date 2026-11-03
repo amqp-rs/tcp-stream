@@ -79,6 +79,7 @@ version  = "^0.10.72"
 optional = true
 
 [dependencies.p12-keystore]
+# Keep 0.2 until the newer parser's prerelease dependencies are stable.
 version = "^0.2"
 optional = true
 
