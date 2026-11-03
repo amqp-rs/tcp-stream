@@ -41,6 +41,17 @@ are provided when the `futures` feature is enabled.
 | `rustls-native-certs` | Loads native root certificates |
 | `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
 
+Enable a certificate store or supply custom roots through `TLSConfig::cert_chain`.
+Custom roots are added to the selected store; they do not replace it. A malformed
+PEM certificate is an error, and a chain without certificates adds no roots.
+Like OpenSSL, every backend reads the legacy `X509 CERTIFICATE` label but skips
+`TRUSTED CERTIFICATE` objects, whose trust settings it does not apply. On Android, the platform verifier accepts no custom roots, so connecting
+with them fails unless default features are disabled and another store is
+selected.
+When multiple store features are enabled, the priority is
+`rustls-platform-verifier`, then `rustls-native-certs`, then
+`rustls-webpki-roots-certs`.
+
 ### Rustls crypto provider (at least one required)
 
 | Flag | Notes |
@@ -107,3 +118,10 @@ Urgent data counts as readable only when `SO_OOBINLINE` is enabled.
 `connect_timeout()` tries each resolved address in turn with the full timeout.
 
 Identity `Debug` output redacts the certificate bundle, private key, and password.
+
+## Tests
+
+Tests use local listeners and test certificates. Run `cargo test --locked` for
+the default backend or select a backend and runtime with `--no-default-features`
+and `--features`. TLS regressions check handshakes, hostname verification, and
+rejection of valid unrelated trust roots without external network access.

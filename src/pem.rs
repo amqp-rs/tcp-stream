@@ -6,6 +6,16 @@ use rustls_pki_types::{
 };
 use std::io;
 
+/// The custom roots of `TLSConfig::cert_chain`, or `InvalidData` if one of its
+/// certificates is malformed. A chain without certificates adds no roots.
+///
+/// `TRUSTED CERTIFICATE` objects are skipped, as OpenSSL's certificate reader
+/// skips them: their trust settings can restrict or reject the root.
+pub(crate) fn custom_roots(cert_chain: &str) -> io::Result<Vec<CertificateDer<'static>>> {
+    pem_certificates(cert_chain.as_bytes())
+        .ok_or_else(|| crate::invalid_data("custom certificate chain is malformed"))
+}
+
 /// A PEM object's label and encapsulated lines.
 type Object<'pem> = (&'pem [u8], Vec<&'pem [u8]>);
 
@@ -121,6 +131,11 @@ pub(crate) fn pem_certificates(pem: &[u8]) -> Option<Vec<CertificateDer<'static>
 }
 
 /// The certificate chain of a PKCS#8 identity, which must not be empty.
+#[cfg(any(
+    feature = "rustls",
+    feature = "openssl",
+    not(all(target_vendor = "apple", not(target_os = "macos")))
+))]
 pub(crate) fn identity_certificates(pem: &[u8]) -> io::Result<Vec<CertificateDer<'static>>> {
     pem_certificates(pem)
         .filter(|certs| !certs.is_empty())
@@ -128,6 +143,11 @@ pub(crate) fn identity_certificates(pem: &[u8]) -> io::Result<Vec<CertificateDer
 }
 
 /// The error for a PKCS#8 identity without a valid certificate chain.
+#[cfg(any(
+    feature = "rustls",
+    feature = "openssl",
+    not(all(target_vendor = "apple", not(target_os = "macos")))
+))]
 pub(crate) fn invalid_identity_chain() -> io::Error {
     crate::invalid_data("PKCS#8 identity requires a valid PEM certificate chain")
 }
@@ -382,6 +402,11 @@ pub(crate) mod tests {
         assert_eq!(pem_certificates(commented.as_bytes()).unwrap(), &certs[..1]);
     }
 
+    #[cfg(any(
+        feature = "rustls",
+        feature = "openssl",
+        not(all(target_vendor = "apple", not(target_os = "macos")))
+    ))]
     #[test]
     fn identity_chains_need_a_certificate() {
         for pem in [
@@ -473,6 +498,15 @@ pub(crate) mod tests {
         assert_eq!(pem_any_private_key(truncated.as_bytes()).unwrap(), key);
         assert!(pem_any_private_key(indented_end(pem).as_bytes()).is_none());
         assert!(pem_any_private_key(junk_after_end(pem).as_bytes()).is_none());
+    }
+
+    #[test]
+    fn custom_roots_skip_trusted_certificates() {
+        let certs = chain();
+        let trusted = encode("TRUSTED CERTIFICATE", &certs[0], "\n");
+        assert!(custom_roots(&trusted).unwrap().is_empty());
+        let legacy = encode("X509 CERTIFICATE", &certs[1], "\n");
+        assert_eq!(custom_roots(&(trusted + &legacy)).unwrap(), &certs[1..2]);
     }
 
     #[test]

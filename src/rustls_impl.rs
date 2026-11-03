@@ -9,9 +9,7 @@ use {
     futures_io::{AsyncRead, AsyncWrite},
 };
 
-use rustls_connector::rustls_pki_types::{
-    CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, pem::PemObject,
-};
+use rustls_connector::rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::io;
 
 /// Reexport rustls-connector's `TlsConnector`
@@ -35,10 +33,13 @@ fn update_rustls_config(
     config: &TLSConfig<'_, '_, '_>,
 ) -> io::Result<()> {
     if let Some(cert_chain) = config.cert_chain {
-        let mut cert_chain = io::BufReader::new(cert_chain.as_bytes());
-        let certs = CertificateDer::pem_reader_iter(&mut cert_chain)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        let certs = crate::pem::custom_roots(cert_chain)?;
+        // Custom roots are explicit configuration, so reject invalid entries
+        // before the connector's best-effort root loading can discard them.
+        for cert in &certs {
+            rustls_connector::webpki::anchor_from_trusted_cert(cert)
+                .map_err(crate::invalid_data)?;
+        }
         c.add_parsable_certificates(certs);
     }
     Ok(())
@@ -104,7 +105,7 @@ pub(crate) fn into_rustls_impl(
     s.into_rustls(&rustls_connector(config)?, domain)
 }
 
-fn rustls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<RustlsConnector> {
+pub(crate) fn rustls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<RustlsConnector> {
     let mut c = select_connector_config()?;
     update_rustls_config(&mut c, &config)?;
 
@@ -172,6 +173,21 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn validates_custom_roots() {
+        crate::tests::check_custom_roots(|config| {
+            update_rustls_config(&mut RustlsConnectorConfig::default(), &config)
+        });
+        update_rustls_config(
+            &mut RustlsConnectorConfig::default(),
+            &TLSConfig {
+                identity: None,
+                cert_chain: Some(crate::tests::ROOT_CERT),
+            },
+        )
+        .unwrap();
     }
 
     #[test]

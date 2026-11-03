@@ -42,10 +42,14 @@ The same pattern is repeated for `MidHandshakeTlsStream` (non-blocking handshake
 | `src/sys/windows.rs` | Windows equivalents |
 | `src/tests.rs` | Socket and identity regression tests |
 | `tests/fixtures/` | Test certificate chain, root, and PKCS#8/PKCS#12 identities |
+| `src/tests/tls.rs` | Local TLS handshake and verification tests |
 
 ### Feature flags
 
-The `into_tls()` / `into_tls_impl()` method selects a backend at compile time via `cfg_if!` in priority order: `rustls-platform-verifier` → `rustls-native-certs` → `rustls-webpki-roots-certs` → `rustls` → `openssl` → `native-tls`.
+The synchronous `into_tls()` / `into_tls_impl()` selects a backend via `cfg_if!`
+in priority order: `rustls` → `openssl` → `native-tls`. Rustls separately selects
+its certificate store in order: `rustls-platform-verifier` → `rustls-native-certs`
+→ `rustls-webpki-roots-certs` → custom roots only.
 
 Async runtime is selected via the `async-rs` crate: `tokio` (default), `smol`, or `async-global-executor`. The `-futures` suffix feature variants (`rustls-futures`, `native-tls-futures`, `openssl-futures`) enable async TLS for those backends.
 
@@ -63,6 +67,13 @@ reject PKCS#8 with `Unsupported` before calling the upstream unimplemented metho
 Upstream native-tls panics on Apple for a PKCS#12 bundle without a private key,
 and always reverses PKCS#12 extra certificates, which OpenSSL 3 already returns
 in order; both are documented in the README rather than worked around.
+`TLSConfig::cert_chain` adds roots to the selected store. Reject malformed
+certificates, but let a chain without certificates add no roots: callers such as
+lapin's client-certificate example pass `Some("")`. Every backend parses them
+with `pem::custom_roots`, which skips `TRUSTED CERTIFICATE` objects as OpenSSL
+does: their trust settings can restrict or reject a root. The rustls platform
+verifier rejects extra roots on Android; keep that limitation documented with
+the field.
 OpenSSL client identity certificates remain in leaf-to-root order: `PKCS12_parse`
 reverses the extra certificates in some SSL libraries, so orient them by their
 issuer links instead of by library version.
@@ -177,6 +188,11 @@ and no probe detects it without blocking, so `is_readable()` reports
 `WouldBlock` there (documented). `is_readable()` also checks the raw socket and does not
 account for buffered TLS plaintext.
 `connect_timeout()` gives each resolved address the full timeout.
+
+TLS tests use local listeners and the fixture trust root. Native TLS tests use
+the PKCS#12 identity for portability across its platforms. Documentation examples
+are compile-only and do not require external network access. Exercise default,
+no-default, and individual backend `-futures` builds when changing feature dispatch.
 
 The Native
 TLS and OpenSSL encrypted-key regressions run in child processes with a

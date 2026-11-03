@@ -41,6 +41,8 @@
 //! | `rustls-native-certs` | Loads native root certificates |
 //! | `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
 //!
+//! Enable a certificate store or supply custom roots through [`TLSConfig::cert_chain`].
+//!
 //! ## Rustls crypto provider (at least one must be enabled)
 //!
 //! | Flag | Notes |
@@ -95,16 +97,7 @@ mod rustls_impl;
 #[cfg(feature = "rustls")]
 pub use rustls_impl::*;
 
-// Native TLS reads PEM only for PKCS#8 identities, which Apple platforms other
-// than macOS do not support.
-#[cfg(any(
-    feature = "rustls",
-    feature = "openssl",
-    all(
-        feature = "native-tls",
-        not(all(target_vendor = "apple", not(target_os = "macos")))
-    )
-))]
+#[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
 mod pem;
 
 #[cfg(feature = "native-tls")]
@@ -199,7 +192,12 @@ pub enum TcpStream {
 pub struct TLSConfig<'data, 'key, 'chain> {
     /// Use for client certificate authentication
     pub identity: Option<Identity<'data, 'key>>,
-    /// The custom certificates chain in PEM format
+    /// Additional trusted root certificates in PEM format.
+    /// Malformed certificates are rejected, and a chain without certificates
+    /// adds no roots. `TRUSTED CERTIFICATE` objects are skipped.
+    /// These roots extend the selected certificate store. On Android, the rustls
+    /// platform verifier accepts no extra roots, so connecting fails when it is
+    /// the selected store and the chain holds a certificate.
     pub cert_chain: Option<&'chain str>,
 }
 
@@ -208,7 +206,12 @@ pub struct TLSConfig<'data, 'key, 'chain> {
 pub struct OwnedTLSConfig {
     /// Use for client certificate authentication
     pub identity: Option<OwnedIdentity>,
-    /// The custom certificates chain in PEM format
+    /// Additional trusted root certificates in PEM format.
+    /// Malformed certificates are rejected, and a chain without certificates
+    /// adds no roots. `TRUSTED CERTIFICATE` objects are skipped.
+    /// These roots extend the selected certificate store. On Android, the rustls
+    /// platform verifier accepts no extra roots, so connecting fails when it is
+    /// the selected store and the chain holds a certificate.
     pub cert_chain: Option<String>,
 }
 

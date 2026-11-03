@@ -25,3 +25,6 @@ calling the platform importer.
 `fixture password`. It was generated with `openssl pkcs8 -topk8 -v2 aes-256-cbc`.
 Tests also relabel it as `PRIVATE KEY` to exercise content validation and append
 it to valid PEM inputs to verify that extra objects never reach the importer.
+
+`untrusted-root.pem` is a valid, unrelated trust anchor for certificate rejection
+tests. Its private key is not stored.

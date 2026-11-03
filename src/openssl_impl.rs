@@ -74,7 +74,7 @@ fn set_identity(
     Ok(())
 }
 
-fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpensslConnector> {
+pub(crate) fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpensslConnector> {
     let mut builder = OpensslConnector::builder(OpensslMethod::tls())?;
     if let Some(identity) = config.identity {
         let (cert, pkey, chain) = match identity {
@@ -106,9 +106,12 @@ fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<OpensslConnect
         let pkey = pkey.ok_or_else(|| crate::invalid_data("client identity has no private key"))?;
         set_identity(&mut builder, &cert, &pkey, chain).map_err(crate::invalid_data)?;
     }
-    if let Some(cert_chain) = config.cert_chain.as_ref() {
-        for cert in X509::stack_from_pem(cert_chain.as_bytes())?.drain(..).rev() {
-            builder.cert_store_mut().add_cert(cert)?;
+    if let Some(cert_chain) = config.cert_chain {
+        for cert in x509_certificates(&crate::pem::custom_roots(cert_chain)?)? {
+            builder
+                .cert_store_mut()
+                .add_cert(cert)
+                .map_err(crate::invalid_data)?;
         }
     }
     Ok(builder.build())
@@ -198,6 +201,16 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
 
+    /// `pem` with legacy encryption headers in its first certificate.
+    fn encrypt_first_certificate(pem: &str) -> String {
+        pem.replacen(
+            "-----BEGIN CERTIFICATE-----\n",
+            "-----BEGIN CERTIFICATE-----\nProc-Type: 4,ENCRYPTED\n\
+             DEK-Info: AES-128-CBC,00000000000000000000000000000000\n\n",
+            1,
+        )
+    }
+
     #[test]
     fn encrypted_pem_certificates_do_not_prompt() {
         if !crate::tests::password_prompt_test_child(
@@ -205,12 +218,7 @@ mod tests {
         ) {
             return;
         }
-        let encrypted = std::str::from_utf8(CERT_CHAIN).unwrap().replacen(
-            "-----BEGIN CERTIFICATE-----\n",
-            "-----BEGIN CERTIFICATE-----\nProc-Type: 4,ENCRYPTED\n\
-             DEK-Info: AES-128-CBC,00000000000000000000000000000000\n\n",
-            1,
-        );
+        let encrypted = encrypt_first_certificate(std::str::from_utf8(CERT_CHAIN).unwrap());
         let identity = |pem: &str| {
             openssl_connector(TLSConfig {
                 identity: Some(Identity::PKCS8 {
@@ -263,6 +271,22 @@ mod tests {
     }
 
     #[test]
+    fn encrypted_pem_roots_do_not_prompt() {
+        if !crate::tests::password_prompt_test_child(
+            "openssl_impl::tests::encrypted_pem_roots_do_not_prompt",
+        ) {
+            return;
+        }
+        let roots = encrypt_first_certificate(ROOT_CERT);
+        let error = openssl_connector(TLSConfig {
+            identity: None,
+            cert_chain: Some(&roots),
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
     fn orders_pkcs12_chains_from_the_leaf() {
         let certs = X509::stack_from_pem(CERT_CHAIN).unwrap();
         assert!(certs.len() >= 3);
@@ -271,6 +295,16 @@ mod tests {
             order_pkcs12_chain(Some(&certs[0]), &mut chain);
             assert_eq!(chain, expected);
         }
+    }
+
+    #[test]
+    fn validates_custom_roots() {
+        crate::tests::check_custom_roots(openssl_connector);
+        openssl_connector(TLSConfig {
+            identity: None,
+            cert_chain: Some(ROOT_CERT),
+        })
+        .unwrap();
     }
 
     #[test]

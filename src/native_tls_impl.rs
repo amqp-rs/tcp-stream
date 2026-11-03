@@ -3,8 +3,6 @@ use crate::{
     TcpStream,
 };
 
-use rustls_pki_types::{CertificateDer, pem::PemObject};
-
 #[cfg(feature = "native-tls-futures")]
 use {
     crate::AsyncTcpStream,
@@ -106,19 +104,18 @@ fn native_tls_connector_builder(
         builder.identity(native_identity);
     }
     if let Some(cert_chain) = config.cert_chain {
-        let mut cert_chain = io::BufReader::new(cert_chain.as_bytes());
-        for cert in CertificateDer::pem_reader_iter(&mut cert_chain)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?
-        {
-            builder
-                .add_root_certificate(Certificate::from_der(&cert[..]).map_err(io::Error::other)?);
+        for cert in crate::pem::custom_roots(cert_chain)? {
+            builder.add_root_certificate(
+                Certificate::from_der(&cert[..]).map_err(crate::invalid_data)?,
+            );
         }
     }
     Ok(builder)
 }
 
-fn native_tls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<NativeTlsConnector> {
+pub(crate) fn native_tls_connector(
+    config: TLSConfig<'_, '_, '_>,
+) -> io::Result<NativeTlsConnector> {
     let has_identity = config.identity.is_some();
     build_connector(&native_tls_connector_builder(config)?, has_identity)
 }
@@ -372,6 +369,19 @@ mod tests {
                 key: crate::tests::PRIVATE_KEY,
             }),
             cert_chain: None,
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn validates_custom_roots() {
+        crate::tests::check_custom_roots(native_tls_connector_builder);
+        native_tls_connector_builder(TLSConfig {
+            identity: Some(Identity::PKCS12 {
+                der: crate::tests::PKCS12_IDENTITY,
+                password: crate::tests::PKCS12_PASSWORD,
+            }),
+            cert_chain: Some(crate::tests::ROOT_CERT),
         })
         .unwrap();
     }

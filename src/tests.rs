@@ -1,9 +1,15 @@
 use super::*;
-#[cfg(any(unix, windows))]
+#[cfg(any(
+    unix,
+    windows,
+    feature = "rustls",
+    feature = "native-tls",
+    feature = "openssl"
+))]
 use std::net::SocketAddr;
 use std::{net::TcpListener, time::Instant};
 
-#[cfg(feature = "openssl")]
+#[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
 pub(super) const ROOT_CERT: &str = include_str!("../tests/fixtures/root.pem");
 #[cfg(any(feature = "rustls", feature = "openssl", feature = "native-tls"))]
 pub(super) const CERT_CHAIN: &[u8] = include_bytes!("../tests/fixtures/chain.pem");
@@ -11,7 +17,7 @@ pub(super) const CERT_CHAIN: &[u8] = include_bytes!("../tests/fixtures/chain.pem
 pub(super) const PRIVATE_KEY: &[u8] = include_bytes!("../tests/fixtures/key.pem");
 #[cfg(any(feature = "native-tls", feature = "openssl", feature = "rustls"))]
 pub(super) const PKCS12_IDENTITY: &[u8] = include_bytes!("../tests/fixtures/identity.p12");
-#[cfg(feature = "rustls")]
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(super) const PKCS12_PASSWORD: &str = "test password";
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 pub(super) const ENCRYPTED_KEY: &str = include_str!("../tests/fixtures/encrypted-key.pem");
@@ -122,6 +128,41 @@ pub(super) fn password_prompt_test_child(test_name: &str) -> bool {
         "{test_name} requested a password: {stderr}"
     );
     false
+}
+
+#[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
+pub(super) fn check_custom_roots<T>(
+    build: impl for<'chain> Fn(TLSConfig<'static, 'static, 'chain>) -> io::Result<T>,
+) {
+    let malformed_certs = [
+        "-----BEGIN CERTIFICATE-----\nAQID\n-----END CERTIFICATE-----\n",
+        "-----BEGIN CERTIFICATE-----\n!!!!\n-----END CERTIFICATE-----\n",
+        "-----BEGIN CERTIFICATE-----\nAQID\n",
+    ];
+    // A chain without certificates adds no roots.
+    for empty in ["", "no certificates here"] {
+        if let Err(error) = build(TLSConfig {
+            identity: None,
+            cert_chain: Some(empty),
+        }) {
+            panic!("rejected custom roots without certificates {empty:?}: {error}");
+        }
+    }
+    let mut inputs = Vec::new();
+    for malformed in malformed_certs {
+        inputs.push(malformed.into());
+        inputs.push(format!("{ROOT_CERT}{malformed}"));
+        inputs.push(format!("{malformed}{ROOT_CERT}"));
+    }
+    for input in inputs {
+        let error = build(TLSConfig {
+            identity: None,
+            cert_chain: Some(&input),
+        })
+        .err()
+        .unwrap_or_else(|| panic!("accepted invalid custom roots: {input:?}"));
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    }
 }
 
 fn socket_pair() -> (TcpStream, StdTcpStream) {
@@ -583,9 +624,7 @@ fn native_tls_rejects_nul_in_domain_without_panicking() {
 #[cfg(feature = "openssl")]
 #[test]
 fn openssl_rejects_nul_in_domain_without_panicking() {
-    let connector = OpensslConnector::builder(OpensslMethod::tls())
-        .unwrap()
-        .build();
+    let connector = openssl_connector(TLSConfig::default()).unwrap();
     let (stream, _peer) = socket_pair();
     let result = stream.into_openssl(&connector, "localhost\0.invalid");
     assert!(
@@ -645,9 +684,7 @@ mod asynchronous {
     #[cfg(feature = "openssl-futures")]
     #[test]
     fn openssl_rejects_nul_in_domain_before_async_io() {
-        let connector = OpensslConnector::builder(OpensslMethod::tls())
-            .unwrap()
-            .build();
+        let connector = openssl_connector(TLSConfig::default()).unwrap();
         let result = poll_once(
             AsyncTcpStream::Plain(NoDebug).into_openssl(&connector, "localhost\0.invalid"),
         );
@@ -656,3 +693,15 @@ mod asynchronous {
         );
     }
 }
+
+#[cfg(any(
+    all(
+        feature = "rustls",
+        any(feature = "rustls--aws_lc_rs", feature = "rustls--ring")
+    ),
+    all(
+        not(feature = "rustls"),
+        any(feature = "openssl", feature = "native-tls")
+    ),
+))]
+mod tls;
