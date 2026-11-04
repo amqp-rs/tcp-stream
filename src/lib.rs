@@ -119,9 +119,9 @@ use std::{
     error::Error,
     fmt,
     io::{self, IoSlice, IoSliceMut, Read, Write},
-    net::{TcpStream as StdTcpStream, ToSocketAddrs},
+    net::{SocketAddr, TcpStream as StdTcpStream, ToSocketAddrs},
     ops::{Deref, DerefMut},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[cfg(feature = "rustls")]
@@ -353,14 +353,45 @@ pub type HandshakeResult = Result<TcpStream, HandshakeError>;
 impl TcpStream {
     /// Wrapper around `std::net::TcpStream::connect`
     pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        connect_std(addr, None).and_then(Self::try_from)
+        StdTcpStream::connect(addr).and_then(Self::try_from)
     }
 
     /// Wrapper around `std::net::TcpStream::connect_timeout`
     ///
-    /// Each resolved address is tried in turn with the full timeout.
+    /// Each resolved address is tried in turn with the full timeout. Use
+    /// [`connect_with_timeouts`](Self::connect_with_timeouts) to also bound the
+    /// total time. A zero timeout returns `InvalidInput`.
     pub fn connect_timeout<A: ToSocketAddrs>(addr: A, timeout: Duration) -> io::Result<Self> {
-        connect_std(addr, Some(timeout)).and_then(Self::try_from)
+        reject_zero_timeouts(&[timeout])?;
+        connect_addrs(
+            addr.to_socket_addrs()?,
+            timeout,
+            None,
+            StdTcpStream::connect_timeout,
+        )
+        .and_then(Self::try_from)
+    }
+
+    /// Connect with a limit for each resolved address and a total deadline.
+    ///
+    /// Each address is tried in turn for at most `per_attempt`. The deadline
+    /// starts once the addresses are resolved: an attempt gets at most the time
+    /// left before it, and none starts after it, so a later address still gets
+    /// its turn when an earlier one drops connection attempts. Address
+    /// resolution itself is not limited. Returns the last attempt's error, or
+    /// `TimedOut` if the deadline left no time for an attempt. A zero duration
+    /// returns `InvalidInput`.
+    pub fn connect_with_timeouts<A: ToSocketAddrs>(
+        addr: A,
+        per_attempt: Duration,
+        total: Duration,
+    ) -> io::Result<Self> {
+        reject_zero_timeouts(&[per_attempt, total])?;
+        let addrs = addr.to_socket_addrs()?;
+        // A deadline too far away to represent cannot be reached.
+        let deadline = Instant::now().checked_add(total);
+        connect_addrs(addrs, per_attempt, deadline, StdTcpStream::connect_timeout)
+            .and_then(Self::try_from)
     }
 
     /// Convert from a `std::net::TcpStream`
@@ -482,22 +513,46 @@ impl TcpStream {
     }
 }
 
-fn connect_std<A: ToSocketAddrs>(addr: A, timeout: Option<Duration>) -> io::Result<StdTcpStream> {
-    if let Some(timeout) = timeout {
-        let addrs = addr.to_socket_addrs()?;
-        let mut err = None;
-        for addr in addrs {
-            match StdTcpStream::connect_timeout(&addr, timeout) {
-                Ok(stream) => return Ok(stream),
-                Err(error) => err = Some(error),
-            }
-        }
-        Err(err.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
-        }))
-    } else {
-        StdTcpStream::connect(addr)
+/// Reject zero durations before resolving or connecting: the standard library
+/// only reports one once its connection attempt is pending.
+fn reject_zero_timeouts(timeouts: &[Duration]) -> io::Result<()> {
+    if timeouts.iter().any(Duration::is_zero) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "connection timeouts must not be zero",
+        ));
     }
+    Ok(())
+}
+
+/// Try each address in turn until `connect` succeeds, giving each attempt
+/// `per_attempt`, or the time left before `deadline` when that is shorter.
+fn connect_addrs<T>(
+    addrs: impl Iterator<Item = SocketAddr>,
+    per_attempt: Duration,
+    deadline: Option<Instant>,
+    mut connect: impl FnMut(&SocketAddr, Duration) -> io::Result<T>,
+) -> io::Result<T> {
+    let mut err = None;
+    for addr in addrs {
+        let timeout = match deadline {
+            Some(deadline) => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err(err.unwrap_or_else(|| io::ErrorKind::TimedOut.into()));
+                }
+                per_attempt.min(remaining)
+            }
+            None => per_attempt,
+        };
+        match connect(&addr, timeout) {
+            Ok(stream) => return Ok(stream),
+            Err(error) => err = Some(error),
+        }
+    }
+    Err(err.unwrap_or_else(|| {
+        io::Error::new(io::ErrorKind::AddrNotAvailable, "couldn't resolve host")
+    }))
 }
 
 // The socket checks use rustix, which does not build on some Unix targets.

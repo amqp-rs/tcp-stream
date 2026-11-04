@@ -160,6 +160,10 @@ Native TLS does not buffer writes: after a write returns `Pending`, retry it wit
 the same bytes instead of cancelling it.
 
 `connect_timeout()` tries each resolved address in turn with the full timeout.
+`connect_with_timeouts()` also takes a total deadline, counted once the addresses
+are resolved: each attempt gets at most its own limit and the time left, so a later
+address still gets its turn after an earlier one drops connection attempts.
+Both return `InvalidInput` for a zero duration.
 
 Identity `Debug` output redacts the certificate bundle, private key, and password.
 

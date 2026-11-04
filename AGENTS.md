@@ -214,6 +214,14 @@ and no probe detects it without blocking, so `is_readable()` reports
 `WouldBlock` there (documented). `is_readable()` also checks the raw socket and does not
 account for buffered TLS plaintext.
 `connect_timeout()` gives each resolved address the full timeout.
+`connect_with_timeouts()` limits each attempt to the smaller of its own limit and
+the time left before a total deadline counted from resolution, starts no attempt
+after the deadline, and returns the last attempt's error (`TimedOut` only when no
+attempt ran). Never share one budget between addresses: a filtered first address
+would use it all. Both reject a zero duration themselves, before resolving the
+address: std only reports it once its attempt is pending, which a loopback
+refusal reported at once (macOS) never is. `connect_addrs()` takes the connect
+function, so tests simulate attempts instead of depending on network timing.
 
 TLS tests use local listeners and the fixture trust root. Native TLS tests use
 the PKCS#12 identity for portability across its platforms. Documentation examples

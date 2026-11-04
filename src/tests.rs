@@ -1,12 +1,4 @@
 use super::*;
-#[cfg(any(
-    unix,
-    windows,
-    feature = "rustls",
-    feature = "native-tls",
-    feature = "openssl"
-))]
-use std::net::SocketAddr;
 use std::{net::TcpListener, time::Instant};
 
 #[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
@@ -202,6 +194,115 @@ pub(super) fn check_custom_roots<T>(
         .unwrap_or_else(|| panic!("accepted invalid custom roots: {input:?}"));
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     }
+}
+
+#[test]
+fn zero_connection_timeouts_are_invalid() {
+    let second = Duration::from_secs(1);
+    // Without an address, no attempt reaches the system: the durations are
+    // rejected first.
+    let none: &[SocketAddr] = &[];
+    for result in [
+        TcpStream::connect_timeout(none, Duration::ZERO),
+        TcpStream::connect_with_timeouts(none, Duration::ZERO, second),
+        TcpStream::connect_with_timeouts(none, second, Duration::ZERO),
+    ] {
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidInput);
+    }
+}
+
+#[test]
+fn connection_with_timeouts_reaches_a_listener() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let stream = TcpStream::connect_with_timeouts(
+        listener.local_addr().unwrap(),
+        Duration::from_secs(5),
+        Duration::from_secs(10),
+    )
+    .unwrap();
+    let (peer, _) = listener.accept().unwrap();
+    assert_eq!(stream.local_addr().unwrap(), peer.peer_addr().unwrap());
+}
+
+/// Addresses for the simulated connection attempts below.
+fn simulated_addrs(count: u16) -> impl Iterator<Item = SocketAddr> {
+    (1..=count).map(|port| SocketAddr::from(([127, 0, 0, 1], port)))
+}
+
+#[test]
+fn each_attempt_gets_the_per_attempt_limit_without_a_deadline() {
+    let mut timeouts = Vec::new();
+    let result: io::Result<()> = connect_addrs(
+        simulated_addrs(3),
+        Duration::from_secs(1),
+        None,
+        |_, timeout| {
+            timeouts.push(timeout);
+            Err(io::ErrorKind::TimedOut.into())
+        },
+    );
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::TimedOut);
+    assert_eq!(timeouts, [Duration::from_secs(1); 3]);
+}
+
+#[test]
+fn a_later_address_is_tried_after_a_dropped_attempt() {
+    let mut attempts = Vec::new();
+    let limit = Duration::from_millis(10);
+    let deadline = Instant::now().checked_add(Duration::from_secs(60));
+    let result = connect_addrs(simulated_addrs(2), limit, deadline, |addr, timeout| {
+        attempts.push((addr.port(), timeout));
+        if addr.port() == 1 {
+            Err(io::ErrorKind::TimedOut.into())
+        } else {
+            Ok(addr.port())
+        }
+    });
+    assert_eq!(result.unwrap(), 2);
+    assert_eq!(attempts, [(1, limit), (2, limit)]);
+}
+
+#[test]
+fn the_deadline_shortens_and_stops_attempts() {
+    let total = Duration::from_millis(50);
+    let mut timeouts = Vec::new();
+    let result: io::Result<()> = connect_addrs(
+        simulated_addrs(3),
+        Duration::from_secs(60),
+        Instant::now().checked_add(total),
+        |_, timeout| {
+            timeouts.push(timeout);
+            std::thread::sleep(Duration::from_millis(30));
+            Err(io::ErrorKind::ConnectionRefused.into())
+        },
+    );
+    // The last attempt's error is kept. A heavily delayed test thread may
+    // reach the deadline before the first attempt.
+    let expected = if timeouts.is_empty() {
+        io::ErrorKind::TimedOut
+    } else {
+        io::ErrorKind::ConnectionRefused
+    };
+    assert_eq!(result.unwrap_err().kind(), expected);
+    assert!(timeouts.len() <= 2, "{timeouts:?}");
+    assert!(timeouts.iter().all(|&timeout| timeout <= total));
+    assert!(timeouts.windows(2).all(|pair| pair[1] < pair[0]));
+}
+
+#[test]
+fn a_passed_deadline_times_out_without_attempts() {
+    let mut attempts = 0;
+    let result = connect_addrs(
+        simulated_addrs(2),
+        Duration::from_secs(1),
+        Some(Instant::now()),
+        |_, _| {
+            attempts += 1;
+            Ok(())
+        },
+    );
+    assert_eq!(result.unwrap_err().kind(), io::ErrorKind::TimedOut);
+    assert_eq!(attempts, 0);
 }
 
 fn socket_pair() -> (TcpStream, StdTcpStream) {
