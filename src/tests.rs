@@ -201,7 +201,7 @@ fn wait_readable(stream: &TcpStream) {
 }
 
 /// Wait until polling `stream` reports one of `events`, without consuming data.
-#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+#[cfg(any(windows, target_os = "linux"))]
 fn wait_for_events(stream: &StdTcpStream, events: rustix::event::PollFlags) {
     use crate::rustix_checks::socket_events;
 
@@ -415,6 +415,7 @@ fn readable_check_reports_an_unconnected_socket() {
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 #[test]
 fn urgent_data_without_inline_delivery_is_not_readable() {
+    #[cfg(any(windows, target_os = "linux"))]
     use rustix::event::PollFlags;
 
     let (mut stream, peer) = socket_pair();
@@ -423,13 +424,26 @@ fn urgent_data_without_inline_delivery_is_not_readable() {
         .set_out_of_band_inline(false)
         .unwrap();
     send_urgent_byte(&peer);
-    #[cfg(windows)]
-    let interest = PollFlags::RDBAND;
-    #[cfg(not(windows))]
-    let interest = PollFlags::PRI;
     // Wait for the urgent data. On Windows POLLIN includes this event even
     // though the ordinary read below would still block.
-    wait_for_events(&stream, interest);
+    #[cfg(windows)]
+    wait_for_events(&stream, PollFlags::RDBAND);
+    #[cfg(target_os = "linux")]
+    wait_for_events(&stream, PollFlags::PRI);
+    // macOS does not report POLLPRI for urgent data, so peek at it instead.
+    #[cfg(target_os = "macos")]
+    wait_until(Duration::from_secs(2), "urgent data never arrived", || {
+        use rustix::net::{RecvFlags, recv};
+
+        match rustix::io::retry_on_intr(|| {
+            recv(&*stream, &mut [0][..], RecvFlags::OOB | RecvFlags::PEEK)
+        }) {
+            Ok((1, _)) => true,
+            Ok(result) => panic!("unexpected urgent data peek: {result:?}"),
+            Err(rustix::io::Errno::INVAL | rustix::io::Errno::AGAIN) => false,
+            Err(error) => panic!("urgent data peek failed: {error}"),
+        }
+    });
     assert_eq!(
         stream.is_readable().unwrap_err().kind(),
         io::ErrorKind::WouldBlock
@@ -536,10 +550,10 @@ fn peer_send_shutdown_does_not_prevent_writing() {
 
 /// Start a nonblocking connection to a port without a listener, or return
 /// `None` if the refusal is reported immediately, as it can be on macOS, where
-/// the tests using it then check nothing. Keep the returned socket while the
-/// stream is in use: it reserves the port.
+/// the tests using it then check nothing. Keep the returned socket, if any,
+/// while the stream is in use: it reserves the port.
 #[cfg(any(unix, windows))]
-fn refused_connection() -> Option<(TcpStream, socket2::Socket)> {
+fn refused_connection() -> Option<(TcpStream, Option<socket2::Socket>)> {
     // Reserve the port without listening so another test cannot reuse it.
     let unavailable = socket2::Socket::new(
         socket2::Domain::IPV4,
@@ -551,6 +565,16 @@ fn refused_connection() -> Option<(TcpStream, socket2::Socket)> {
         .bind(&"127.0.0.1:0".parse::<SocketAddr>().unwrap().into())
         .unwrap();
     let addr = unavailable.local_addr().unwrap();
+    // XNU silently drops a SYN to a bound socket that is not listening, so the
+    // attempt would time out instead of being refused. Release the port there,
+    // accepting that another test could bind it before the connection fails.
+    #[cfg(target_vendor = "apple")]
+    let unavailable = {
+        drop(unavailable);
+        None
+    };
+    #[cfg(not(target_vendor = "apple"))]
+    let unavailable = Some(unavailable);
     let socket = socket2::Socket::new(
         socket2::Domain::IPV4,
         socket2::Type::STREAM,

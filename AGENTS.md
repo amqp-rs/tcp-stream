@@ -162,7 +162,9 @@ Connection status checks `peer_addr()`, so a full send buffer does not imply a
 pending connection, and confirms a peer with a zero-length write, which reports
 a local write shutdown or a pending socket error as 0.34.14 did; XNU reports
 `EINVAL` instead of `ENOTCONN` once both directions are shut. An unconnected
-socket with any poll event has finished its attempt: check the peer address
+socket with any poll event has finished its attempt, except that on Windows
+`POLLERR` alone does not end it: WSAPoll reports it while Windows still retries
+a refused loopback attempt, before it sets the socket error. Check the peer address
 again, since the attempt can end between the checks, then the socket error.
 Without either, let the zero-length write decide, as 0.34.14 did: it fails if
 the attempt failed and its error was already retrieved, and it starts the
@@ -215,6 +217,11 @@ even after a test failure, then fail the job
 if any configuration failed. TLS verification tests use a valid unrelated root
 to ensure certificate rejection is exercised after successful configuration.
 Keep the cyclic PKCS#12 fixture for a future issuer-cycle regression test.
+`.gitattributes` keeps the PEM fixtures LF on Windows checkouts, since tests
+edit them line by line. XNU drops a SYN to a bound socket that is not
+listening, so on Apple targets the refused-connection tests release the port
+instead of reserving it, and the urgent-data test peeks with `MSG_OOB` because
+macOS does not report `POLLPRI` for urgent data.
 Async OpenSSL requires async-openssl 0.2.12, which buffers OpenSSL's output:
 the `buffered_writes` tests check that accepted bytes survive cancellation, that
 a Pending write accepts none of its input, and that readers and writers keep their
