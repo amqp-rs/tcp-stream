@@ -6,7 +6,12 @@ use std::io;
 
 pub(crate) fn try_connect(stream: &mut StdTcpStream) -> io::Result<bool> {
     match has_peer(stream)? {
-        Some(true) => return connected(stream),
+        // Winsock reports the peer of an attempt that is still pending, which
+        // the write probe then rejects with NotConnected: check it as pending.
+        Some(true) => match connected(stream) {
+            Err(err) if cfg!(windows) && err.kind() == io::ErrorKind::NotConnected => {}
+            result => return result,
+        },
         Some(false) => {}
         None => return probe_connection(stream),
     }

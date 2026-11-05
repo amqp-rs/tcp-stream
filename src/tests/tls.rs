@@ -2,6 +2,25 @@ use super::*;
 
 const UNTRUSTED_ROOT_CERT: &str = include_str!("../../tests/fixtures/untrusted-root.pem");
 
+/// The roots that the client trusts to reach the test server. A Schannel server
+/// only sends the intermediates found in the system stores, so the Windows
+/// Native TLS server sends its leaf alone: trust the intermediate as well there.
+fn trusted_roots() -> &'static str {
+    cfg_if::cfg_if! {
+        if #[cfg(all(windows, not(feature = "rustls"), not(feature = "openssl")))] {
+            static ROOTS: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| {
+                let chain = std::str::from_utf8(CERT_CHAIN).unwrap();
+                let begin = "-----BEGIN CERTIFICATE-----";
+                let intermediate = chain[begin.len()..].find(begin).unwrap() + begin.len();
+                chain[intermediate..].to_owned()
+            });
+            &ROOTS
+        } else {
+            ROOT_CERT
+        }
+    }
+}
+
 trait TestStream: Read + Write {}
 impl<S: Read + Write> TestStream for S {}
 
@@ -80,7 +99,7 @@ fn nonblocking_tls_handshake_and_io() {
         "localhost",
         TLSConfig {
             identity: None,
-            cert_chain: Some(ROOT_CERT),
+            cert_chain: Some(trusted_roots()),
         },
     );
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -154,7 +173,7 @@ fn assert_verification_rejected(domain: &str, root: &str) {
 
 #[test]
 fn tls_rejects_wrong_hostname() {
-    assert_verification_rejected("wrong.example", ROOT_CERT);
+    assert_verification_rejected("wrong.example", trusted_roots());
 }
 
 #[test]
@@ -215,7 +234,7 @@ mod asynchronous {
                     "localhost",
                     TLSConfig {
                         identity: None,
-                        cert_chain: Some(ROOT_CERT),
+                        cert_chain: Some(trusted_roots()),
                     },
                 )
                 .await
@@ -288,7 +307,7 @@ mod asynchronous {
 
     #[test]
     fn async_tls_rejects_wrong_hostname() {
-        assert_verification_rejected("wrong.example", ROOT_CERT);
+        assert_verification_rejected("wrong.example", trusted_roots());
     }
 
     #[test]
