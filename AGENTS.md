@@ -164,7 +164,9 @@ a local write shutdown or a pending socket error as 0.34.14 did; XNU reports
 `EINVAL` instead of `ENOTCONN` once both directions are shut. An unconnected
 socket with any poll event has finished its attempt, except that on Windows
 `POLLERR` alone does not end it: WSAPoll reports it while Windows still retries
-a refused loopback attempt, before it sets the socket error. Check the peer address
+a refused loopback attempt, before it sets the socket error. Winsock also
+reports the peer of a pending attempt, so a peer whose write probe reports
+`NotConnected` is checked as pending there. Check the peer address
 again, since the attempt can end between the checks, then the socket error.
 Without either, let the zero-length write decide, as 0.34.14 did: it fails if
 the attempt failed and its error was already retrieved, and it starts the
@@ -221,7 +223,9 @@ Keep the cyclic PKCS#12 fixture for a future issuer-cycle regression test.
 edit them line by line. XNU drops a SYN to a bound socket that is not
 listening, so on Apple targets the refused-connection tests release the port
 instead of reserving it, and the urgent-data test peeks with `MSG_OOB` because
-macOS does not report `POLLPRI` for urgent data.
+macOS does not report `POLLPRI` for urgent data. A Schannel server only sends
+intermediates found in the system stores, so with the Windows Native TLS test
+server the client also trusts the intermediate.
 Async OpenSSL requires async-openssl 0.2.12, which buffers OpenSSL's output:
 the `buffered_writes` tests check that accepted bytes survive cancellation, that
 a Pending write accepts none of its input, and that readers and writers keep their
