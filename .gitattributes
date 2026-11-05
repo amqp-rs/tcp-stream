@@ -1,0 +1,3 @@
+# Tests edit and compare the PEM fixtures line by line, so keep LF endings on
+# Windows checkouts too.
+*.pem text eol=lf

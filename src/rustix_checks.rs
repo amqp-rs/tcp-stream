@@ -18,8 +18,15 @@ pub(crate) fn try_connect(stream: &mut StdTcpStream) -> io::Result<bool> {
     }
     use rustix::event::PollFlags;
 
+    // WSAPoll can report POLLERR alone while Windows still retries a refused
+    // attempt, before it sets the socket error, so the attempt has only ended
+    // there once the socket is writable or hung up.
+    #[cfg(windows)]
+    let ended = PollFlags::OUT | PollFlags::HUP;
+    #[cfg(not(windows))]
+    let ended = PollFlags::OUT | PollFlags::ERR | PollFlags::HUP;
     let events = socket_events(stream, PollFlags::OUT)?;
-    if !events.intersects(PollFlags::OUT | PollFlags::ERR | PollFlags::HUP) {
+    if !events.intersects(ended) {
         return Ok(false);
     }
     // The attempt ended, possibly after the first check, so look for a peer
