@@ -302,37 +302,9 @@ mod tests {
 
         #[cfg(feature = "native-tls-futures")]
         {
-            use std::{
-                pin::Pin,
-                task::{Context, Poll},
-            };
-            struct NoIo;
-            impl AsyncRead for NoIo {
-                fn poll_read(
-                    self: Pin<&mut Self>,
-                    _: &mut Context<'_>,
-                    _: &mut [u8],
-                ) -> Poll<io::Result<usize>> {
-                    panic!("identity loading must fail before I/O")
-                }
-            }
-            impl AsyncWrite for NoIo {
-                fn poll_write(
-                    self: Pin<&mut Self>,
-                    _: &mut Context<'_>,
-                    _: &[u8],
-                ) -> Poll<io::Result<usize>> {
-                    panic!("identity loading must fail before I/O")
-                }
-                fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
-                    panic!("identity loading must fail before I/O")
-                }
-                fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
-                    panic!("identity loading must fail before I/O")
-                }
-            }
+            use std::task::Poll;
             let result = crate::tests::poll_once(into_native_tls_impl_async(
-                AsyncTcpStream::Plain(NoIo),
+                AsyncTcpStream::Plain(crate::tests::NoIo),
                 "localhost",
                 config(),
             ));

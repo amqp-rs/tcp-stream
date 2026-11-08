@@ -64,7 +64,8 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     /// When no `rustls-futures`, `openssl-futures`, or `native-tls-futures`
     /// feature is enabled, this deliberately returns the plain stream without
     /// encryption and ignores `domain` and `config`. Enabling a synchronous
-    /// TLS backend alone does not enable async TLS.
+    /// TLS backend alone does not enable async TLS. [`HAS_ASYNC_TLS`] tells
+    /// whether an async backend is enabled.
     pub async fn into_tls(self, domain: &str, config: TLSConfig<'_, '_, '_>) -> io::Result<Self> {
         into_tls_impl(self, domain, config).await
     }
@@ -131,25 +132,40 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncTcpStream<S> {
     }
 }
 
-async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
-    s: AsyncTcpStream<S>,
-    domain: &str,
-    config: TLSConfig<'_, '_, '_>,
-) -> io::Result<AsyncTcpStream<S>> {
-    cfg_if! {
-        if #[cfg(feature = "rustls-futures")] {
-            crate::into_rustls_impl_async(s, domain, config).await
-        } else if #[cfg(feature = "openssl-futures")] {
-            crate::into_openssl_impl_async(s, domain, config).await
-        } else if #[cfg(feature = "native-tls-futures")] {
-            crate::into_native_tls_impl_async(s, domain, config).await
-        } else {
+// The backend of `AsyncTcpStream::into_tls()`, in priority order.
+// `HAS_ASYNC_TLS` comes from the same selection.
+cfg_if! {
+    if #[cfg(feature = "rustls-futures")] {
+        use crate::into_rustls_impl_async as into_tls_impl;
+        const ASYNC_TLS_BACKEND: bool = true;
+    } else if #[cfg(feature = "openssl-futures")] {
+        use crate::into_openssl_impl_async as into_tls_impl;
+        const ASYNC_TLS_BACKEND: bool = true;
+    } else if #[cfg(feature = "native-tls-futures")] {
+        use crate::into_native_tls_impl_async as into_tls_impl;
+        const ASYNC_TLS_BACKEND: bool = true;
+    } else {
+        const ASYNC_TLS_BACKEND: bool = false;
+
+        async fn into_tls_impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+            s: AsyncTcpStream<S>,
+            domain: &str,
+            config: TLSConfig<'_, '_, '_>,
+        ) -> io::Result<AsyncTcpStream<S>> {
             // Intentional plaintext fallback for code shared across feature sets.
             let _ = (domain, config);
             Ok(AsyncTcpStream::Plain(s.into_plain()?))
         }
     }
 }
+
+/// Whether [`AsyncTcpStream::into_tls`] has an async TLS backend. Without one,
+/// it returns the plain stream, even if a synchronous backend is enabled. Cargo
+/// unifies features across the dependency graph, so this can differ from the
+/// features a dependent crate enables itself, and from the value these docs
+/// show. It does not tell which backend the upgrade uses, nor whether that
+/// backend can connect: rustls, for instance, panics without a crypto provider.
+pub const HAS_ASYNC_TLS: bool = ASYNC_TLS_BACKEND;
 
 impl<S: AsyncRead + AsyncWrite + Send + Unpin + 'static> AsyncRead for AsyncTcpStream<S> {
     fn poll_read(

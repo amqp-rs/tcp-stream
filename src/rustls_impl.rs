@@ -107,12 +107,14 @@ pub(crate) fn into_rustls_impl(
     s.into_rustls(&rustls_connector(config)?, domain)
 }
 
-pub(crate) fn rustls_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<RustlsConnector> {
+pub(crate) fn rustls_connector(mut config: TLSConfig<'_, '_, '_>) -> io::Result<RustlsConnector> {
+    // Reject an invalid identity before loading the certificate store, which
+    // can fail on its own.
+    let identity = config.identity.take().map(rustls_identity).transpose()?;
     let mut c = select_connector_config()?;
     update_rustls_config(&mut c, &config)?;
 
-    let connector = if let Some(identity) = config.identity {
-        let (certs, key) = rustls_identity(identity)?;
+    let connector = if let Some((certs, key)) = identity {
         c.connector_with_single_cert(certs, key)?
     } else {
         c.connector_with_no_client_auth()?

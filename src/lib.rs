@@ -52,6 +52,9 @@
 //! **Warning:** when no matching TLS backend is enabled, `into_tls()` deliberately
 //! returns the plain stream without encryption and ignores its TLS configuration.
 //! This allows downstream code to use the same call with and without TLS features.
+//! [`HAS_TLS`] tells whether `TcpStream::into_tls()` has a backend and, with the
+//! `futures` feature, `HAS_ASYNC_TLS` whether `AsyncTcpStream::into_tls()` has an
+//! async one.
 //!
 //! ## Rustls certificate store (only when `rustls` is active)
 //!
@@ -420,6 +423,7 @@ impl TcpStream {
     /// When no TLS backend feature is enabled, this deliberately returns the
     /// plain stream without encryption and ignores `domain` and `config`. This
     /// supports downstream code shared between TLS and plaintext builds.
+    /// [`HAS_TLS`] tells whether a backend is enabled.
     pub fn into_tls(
         self,
         domain: &str,
@@ -563,21 +567,40 @@ fn connection_in_progress(err: &io::Error) -> bool {
         )
 }
 
-fn into_tls_impl(s: TcpStream, domain: &str, config: TLSConfig<'_, '_, '_>) -> HandshakeResult {
-    cfg_if! {
-        if #[cfg(feature = "rustls")] {
-            into_rustls_impl(s, domain, config)
-        } else if #[cfg(feature = "openssl")] {
-            into_openssl_impl(s, domain, config)
-        } else if #[cfg(feature = "native-tls")] {
-            into_native_tls_impl(s, domain, config)
-        } else {
+// The backend of `TcpStream::into_tls()`, in priority order. `HAS_TLS` comes
+// from the same selection.
+cfg_if! {
+    if #[cfg(feature = "rustls")] {
+        use rustls_impl::into_rustls_impl as into_tls_impl;
+        const TLS_BACKEND: bool = true;
+    } else if #[cfg(feature = "openssl")] {
+        use openssl_impl::into_openssl_impl as into_tls_impl;
+        const TLS_BACKEND: bool = true;
+    } else if #[cfg(feature = "native-tls")] {
+        use native_tls_impl::into_native_tls_impl as into_tls_impl;
+        const TLS_BACKEND: bool = true;
+    } else {
+        const TLS_BACKEND: bool = false;
+
+        fn into_tls_impl(
+            s: TcpStream,
+            domain: &str,
+            config: TLSConfig<'_, '_, '_>,
+        ) -> HandshakeResult {
             // Intentional plaintext fallback for code shared across feature sets.
             let _ = (domain, config);
             Ok(TcpStream::Plain(s.into_plain()?))
         }
     }
 }
+
+/// Whether [`TcpStream::into_tls`] has a TLS backend. Without one, it returns
+/// the plain stream. Cargo unifies features across the dependency graph, so
+/// this can differ from the features a dependent crate enables itself, and from
+/// the value these docs show. It does not tell which backend the upgrade uses,
+/// nor whether that backend can connect: rustls, for instance, panics without
+/// a crypto provider.
+pub const HAS_TLS: bool = TLS_BACKEND;
 
 impl TryFrom<StdTcpStream> for TcpStream {
     type Error = io::Error;

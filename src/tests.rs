@@ -64,13 +64,48 @@ pub(super) fn check_pkcs12_rejections<T>(build: impl Fn(TLSConfig<'_, '_, '_>) -
 }
 
 /// Poll `future` once, with a waker that does nothing.
-#[cfg(any(
-    feature = "native-tls-futures",
-    feature = "openssl-futures",
-    all(feature = "futures", not(feature = "rustls-futures"))
-))]
+#[cfg(feature = "futures")]
 pub(super) fn poll_once<F: Future>(future: F) -> std::task::Poll<F::Output> {
     std::pin::pin!(future).poll(&mut std::task::Context::from_waker(std::task::Waker::noop()))
+}
+
+/// An async stream for upgrades that must fail before any I/O. It implements no
+/// `Debug`, so that it also checks that `AsyncTcpStream`'s does not need one.
+#[cfg(feature = "futures")]
+pub(super) struct NoIo;
+
+#[cfg(feature = "futures")]
+impl futures_io::AsyncRead for NoIo {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        _: &mut [u8],
+    ) -> std::task::Poll<io::Result<usize>> {
+        panic!("the upgrade must fail before I/O")
+    }
+}
+
+#[cfg(feature = "futures")]
+impl futures_io::AsyncWrite for NoIo {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+        _: &[u8],
+    ) -> std::task::Poll<io::Result<usize>> {
+        panic!("the upgrade must fail before I/O")
+    }
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        panic!("the upgrade must fail before I/O")
+    }
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        _: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        panic!("the upgrade must fail before I/O")
+    }
 }
 
 #[cfg(any(feature = "native-tls", feature = "openssl"))]
@@ -660,66 +695,49 @@ fn openssl_rejects_nul_in_domain_without_panicking() {
     );
 }
 
-#[cfg(not(any(feature = "rustls", feature = "native-tls", feature = "openssl")))]
+/// Arguments that every TLS backend rejects before connecting, so the upgrade
+/// tests need no crypto provider, and that the plaintext fallback ignores.
+fn ignored_tls_config() -> TLSConfig<'static, 'static, 'static> {
+    TLSConfig {
+        identity: Some(Identity::PKCS12 {
+            der: &[],
+            password: "ignored\0password",
+        }),
+        cert_chain: Some("ignored roots"),
+    }
+}
+
+/// Whether `error` rejects the domain or `ignored_tls_config()`.
+fn rejects_ignored_arguments(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput
+    )
+}
+
 #[test]
-fn tls_upgrade_without_a_backend_preserves_plaintext() {
+fn tls_upgrade_preserves_plaintext_only_without_a_backend() {
     let (stream, _peer) = socket_pair();
-    let stream = stream
-        .into_tls(
-            "ignored\0domain",
-            TLSConfig {
-                identity: Some(Identity::PKCS12 {
-                    der: &[],
-                    password: "ignored\0password",
-                }),
-                cert_chain: Some("ignored roots"),
-            },
-        )
-        .unwrap();
-    assert!(matches!(stream, TcpStream::Plain(_)));
+    // A handshake that starts despite the arguments reports WouldBlock.
+    stream.set_nonblocking(true).unwrap();
+    let result = stream.into_tls("ignored\0domain", ignored_tls_config());
+    let plain = match &result {
+        Ok(TcpStream::Plain(_)) => true,
+        Err(HandshakeError::Failure(error)) if rejects_ignored_arguments(error) => false,
+        _ => panic!("unexpected upgrade result: {result:?}"),
+    };
+    assert_eq!(plain, !HAS_TLS, "{result:?}");
 }
 
 #[cfg(feature = "futures")]
 mod asynchronous {
     use super::*;
-    use futures_io::{AsyncRead, AsyncWrite};
-    use std::{
-        pin::Pin,
-        task::{Context, Poll},
-    };
-
-    struct NoDebug;
-
-    impl AsyncRead for NoDebug {
-        fn poll_read(
-            self: Pin<&mut Self>,
-            _: &mut Context<'_>,
-            _: &mut [u8],
-        ) -> Poll<io::Result<usize>> {
-            Poll::Ready(Ok(0))
-        }
-    }
-
-    impl AsyncWrite for NoDebug {
-        fn poll_write(
-            self: Pin<&mut Self>,
-            _: &mut Context<'_>,
-            data: &[u8],
-        ) -> Poll<io::Result<usize>> {
-            Poll::Ready(Ok(data.len()))
-        }
-        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Poll::Ready(Ok(()))
-        }
-        fn poll_close(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<io::Result<()>> {
-            Poll::Ready(Ok(()))
-        }
-    }
+    use std::task::Poll;
 
     #[test]
     fn stream_debug_does_not_require_inner_debug() {
         assert_eq!(
-            format!("{:?}", AsyncTcpStream::Plain(NoDebug)),
+            format!("{:?}", AsyncTcpStream::Plain(NoIo)),
             "AsyncTcpStream { .. }"
         );
     }
@@ -728,7 +746,7 @@ mod asynchronous {
     #[test]
     fn native_tls_rejects_nul_in_domain_before_async_io() {
         let result = poll_once(
-            AsyncTcpStream::Plain(NoDebug)
+            AsyncTcpStream::Plain(NoIo)
                 .into_native_tls(NativeTlsConnector::builder(), "localhost\0.invalid"),
         );
         assert!(
@@ -740,32 +758,24 @@ mod asynchronous {
     #[test]
     fn openssl_rejects_nul_in_domain_before_async_io() {
         let connector = openssl_connector(TLSConfig::default()).unwrap();
-        let result = poll_once(
-            AsyncTcpStream::Plain(NoDebug).into_openssl(&connector, "localhost\0.invalid"),
-        );
+        let result =
+            poll_once(AsyncTcpStream::Plain(NoIo).into_openssl(&connector, "localhost\0.invalid"));
         assert!(
             matches!(result, Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::InvalidInput)
         );
     }
 
-    #[cfg(not(any(
-        feature = "rustls-futures",
-        feature = "native-tls-futures",
-        feature = "openssl-futures"
-    )))]
     #[test]
-    fn tls_upgrade_without_an_async_backend_preserves_plaintext() {
-        let result = poll_once(AsyncTcpStream::Plain(NoDebug).into_tls(
-            "ignored\0domain",
-            TLSConfig {
-                identity: Some(Identity::PKCS12 {
-                    der: &[],
-                    password: "ignored\0password",
-                }),
-                cert_chain: Some("ignored roots"),
-            },
-        ));
-        assert!(matches!(result, Poll::Ready(Ok(AsyncTcpStream::Plain(_)))));
+    fn tls_upgrade_preserves_plaintext_only_without_an_async_backend() {
+        let result = match poll_once(
+            AsyncTcpStream::Plain(NoIo).into_tls("ignored\0domain", ignored_tls_config()),
+        ) {
+            Poll::Ready(Ok(AsyncTcpStream::Plain(_))) => Ok(()),
+            Poll::Ready(Err(error)) if rejects_ignored_arguments(&error) => Err(error),
+            Poll::Ready(Err(error)) => panic!("unexpected upgrade error: {error}"),
+            _ => panic!("the upgrade returned a TLS stream or did not finish"),
+        };
+        assert_eq!(result.is_ok(), !HAS_ASYNC_TLS, "{result:?}");
     }
 }
 

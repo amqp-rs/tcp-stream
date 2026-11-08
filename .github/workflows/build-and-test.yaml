@@ -46,6 +46,7 @@ jobs:
           for features in \
             "" \
             "futures" \
+            "rustls,futures" \
             "native-tls-futures,tokio" \
             "openssl-futures,smol" \
             "rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor"

@@ -61,6 +61,13 @@ docs must tell users of another async backend to disable default features.
 The plaintext fallback in `into_tls()` is intentional: without a matching TLS
 backend it returns `Plain` and ignores the TLS arguments, allowing the same
 downstream code across feature sets. Keep the warning in the public method docs.
+`HAS_TLS` and `HAS_ASYNC_TLS` (with `futures`) report whether a backend is enabled
+for each method, so that callers can refuse TLS URLs when feature unification left none.
+Each comes from the `cfg_if!` that selects the backend of its `into_tls_impl`, so
+the two cannot diverge. The plaintext-fallback tests run in every build and compare
+the upgrade with its constant, using arguments that every backend rejects before
+connecting, so they need no crypto provider; the async one runs on `NoIo`, a
+stream that panics on I/O.
 
 Rustls needs a crypto provider: the `rustls--aws_lc_rs` (default) or `rustls--ring` feature, or a
 process-level provider installed before connecting. Without either, the required
@@ -98,8 +105,9 @@ builds the connector before connecting so that this holds there too. Rustls
 checks that each identity-chain object has the DER shape of a certificate,
 including the start of its to-be-signed part, so a non-certificate such as a CRL
 or a certification request fails at configuration as in the other backends; a
-full X.509 parse would reject certificates that servers accept. Build these errors with
-`crate::invalid_data`.
+full X.509 parse would reject certificates that servers accept. Rustls parses the
+identity before loading its certificate store, which can fail on its own. Build
+these errors with `crate::invalid_data`.
 Never pass certificate PEM to OpenSSL's PEM reader: `X509::stack_from_pem` gives
 it no password callback, so an encrypted object would make it prompt. Decode the
 certificates with `src/pem.rs` and load them with `X509::from_der`.
@@ -213,10 +221,11 @@ are compile-only and do not require external network access. Exercise default,
 no-default, and individual backend `-futures` builds when changing feature dispatch.
 
 CI retains the shared action's compile checks and runs default, plaintext,
-futures-only, Native TLS/Tokio, OpenSSL/smol, and rustls/async-global-executor tests
-separately. Run every configuration, and every test target with `--no-fail-fast`,
-even after a test failure, then fail the job
-if any configuration failed. TLS verification tests use a valid unrelated root
+futures-only, rustls with `futures` but neither async TLS nor a crypto provider
+(the only CI set where `HAS_TLS` and `HAS_ASYNC_TLS` differ), Native TLS/Tokio,
+OpenSSL/smol, and rustls/async-global-executor tests separately. Run every
+configuration, and every test target with `--no-fail-fast`, even after a test
+failure, then fail the job if any configuration failed. TLS verification tests use a valid unrelated root
 to ensure certificate rejection is exercised after successful configuration.
 Keep the cyclic PKCS#12 fixture for a future issuer-cycle regression test.
 `.gitattributes` keeps the PEM fixtures LF on Windows checkouts, since tests

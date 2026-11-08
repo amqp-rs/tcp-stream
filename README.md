@@ -55,7 +55,12 @@ either `into_tls()` to use it.
 returns the plain stream without encryption and ignores its TLS configuration.
 `AsyncTcpStream::into_tls()` does the same when no async TLS backend is enabled,
 even if a synchronous backend is present. This lets downstream code use the same
-call with and without TLS features.
+call with and without TLS features. To refuse TLS when no backend is compiled
+in, check `HAS_TLS` before `TcpStream::into_tls()` and, with the `futures`
+feature, `HAS_ASYNC_TLS` before `AsyncTcpStream::into_tls()`: Cargo's feature
+unification can enable a backend that a dependent crate does not enable itself.
+Neither tells whether the backend can connect: rustls, for instance, panics
+without a crypto provider.
 
 ### Rustls certificate store (when `rustls` is active)
 
