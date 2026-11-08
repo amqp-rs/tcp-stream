@@ -14,7 +14,7 @@ cargo fmt --all                                          # format
 cargo fmt --all -- --check                               # check formatting without changing files
 ```
 
-Minimum supported Rust version: **1.88.0** (Rust 2024 edition).
+Minimum supported Rust version: **1.89.0** (Rust 2024 edition).
 
 ## Architecture
 
@@ -115,7 +115,7 @@ certificates with `src/pem.rs` and load them with `X509::from_der`.
 Use an explicit empty passphrase when loading OpenSSL PKCS#8 keys, so password
 handling never opens a terminal. The PKCS#8 identity format provides no password.
 Validate Native TLS PKCS#8 PEM and the complete unencrypted DER structure with
-the stable `pkcs8` 0.10 parser before importing it; find the key object with
+the stable `pkcs8` 0.11 parser before importing it; find the key object with
 `pem::pem_private_key`, which follows the certificate boundary rules and decodes
 into a single wiped buffer. Rustls finds its key with `pem::pem_any_private_key`. PEM labels and heuristic DER
 classification alone do not exclude encrypted DER that can invoke a password
@@ -202,7 +202,7 @@ or a reset whose error was already retrieved, and returns that error; a Fast
 Open handshake that the write started reads as `WouldBlock`. Every check shares
 `write_probe()`, which waits for such a handshake on a blocking socket. On
 Windows it reports `WSAESHUTDOWN` as `BrokenPipe`, which the standard library
-does not do at the 1.88 MSRV. WSAPoll
+does not do at the 1.89 MSRV. WSAPoll
 reports `POLLHUP` when only the peer stopped sending, so Windows never treats it
 as closed for writing; when WSAPoll reports nothing, `is_writable()` still runs
 the probe there to catch a local write shutdown, and it does not report failed connections before Windows

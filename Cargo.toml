@@ -1,6 +1,6 @@
 [package]
 name = "tcp-stream"
-version = "0.34.16"
+version = "0.34.17"
 edition = "2024"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 description = "std::net::TcpStream on steroids"
@@ -10,7 +10,7 @@ documentation = "https://docs.rs/tcp-stream"
 keywords = ["tcp", "tls", "async", "non-blocking", "io"]
 categories = ["asynchronous", "network-programming"]
 license = "BSD-2-Clause"
-rust-version = "1.88.0"
+rust-version = "1.89.0"
 
 [lib]
 name = "tcp_stream"
@@ -64,7 +64,8 @@ version = "^0.2.12"
 optional = true
 
 [dependencies.async-rs]
-version = "^0.8"
+# 0.8.3 moves to hickory-resolver 0.26, past the unfixed hickory-proto 0.25 advisories.
+version = "^0.8.3"
 default-features = false
 optional = true
 
@@ -86,7 +87,7 @@ version = "^0.2"
 optional = true
 
 [dependencies.pkcs8]
-version = "^0.10.2"
+version = "^0.11"
 default-features = false
 features = ["std", "pem"]
 optional = true
@@ -106,7 +107,7 @@ features         = ["std"]
 all-features = true
 
 [target.'cfg(any(unix, windows))'.dev-dependencies]
-socket2 = "^0.6"
+socket2 = "^0.6.3"
 
 # The socket check selection excludes the `qnx` target OS, which older
 # toolchains do not list.

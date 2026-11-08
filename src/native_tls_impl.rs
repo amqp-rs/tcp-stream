@@ -39,7 +39,7 @@ fn invalid_pkcs8_key() -> io::Error {
 #[cfg(not(all(target_vendor = "apple", not(target_os = "macos"))))]
 fn pkcs8_identity_documents(pem: &[u8], key: &[u8]) -> io::Result<(String, pkcs8::SecretDocument)> {
     use pkcs8::{
-        PrivateKeyInfo, SecretDocument,
+        PrivateKeyInfoRef, SecretDocument,
         der::pem::{LineEnding, encode_string},
     };
 
@@ -47,7 +47,7 @@ fn pkcs8_identity_documents(pem: &[u8], key: &[u8]) -> io::Result<(String, pkcs8
     // The PEM label does not validate the DER: OpenSSL can recognize an
     // EncryptedPrivateKeyInfo even under PRIVATE KEY and ask for a password.
     // Decode the complete unencrypted structure, including its DER boundary.
-    let key = PrivateKeyInfo::try_from(key_der.as_slice())
+    let key = PrivateKeyInfoRef::try_from(key_der.as_slice())
         .and_then(SecretDocument::try_from)
         .map_err(|_| invalid_pkcs8_key())?;
 
