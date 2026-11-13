@@ -32,6 +32,7 @@ openssl                   = ["dep:openssl", "dep:rustls-pki-types"]
 rustls-platform-verifier  = ["rustls", "rustls-connector/platform-verifier"]
 rustls-native-certs       = ["rustls", "rustls-connector/native-certs"]
 rustls-webpki-roots-certs = ["rustls", "rustls-connector/webpki-root-certs"]
+rustls-webpki-root-certs  = ["rustls-webpki-roots-certs"] # the name the next major keeps
 rustls                    = ["dep:rustls-connector", "dep:p12-keystore", "dep:rustls-pki-types"]
 vendored-openssl          = ["openssl", "openssl/vendored"]
 

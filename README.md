@@ -69,6 +69,7 @@ without a crypto provider.
 | `rustls-platform-verifier` *(default)* | Uses the platform trust store |
 | `rustls-native-certs` | Loads native root certificates |
 | `rustls-webpki-roots-certs` | Uses the webpki bundled root set |
+| `rustls-webpki-root-certs` | Alias of `rustls-webpki-roots-certs`, and its name in the next major |
 
 Enable a certificate store or supply custom roots through `TLSConfig::cert_chain`.
 Custom roots are added to the selected store; they do not replace it. A malformed
