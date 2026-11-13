@@ -13,7 +13,4 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: amqp-rs/actions/checkout@main
-      - uses: amqp-rs/actions/lint@main
+    uses: amqp-rs/actions/.github/workflows/reusable-lint.yml@main

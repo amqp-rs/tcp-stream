@@ -12,8 +12,5 @@ permissions:
   contents: read
 
 jobs:
-  semver_check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: amqp-rs/actions/checkout@main
-      - uses: amqp-rs/actions/semver@main
+  semver:
+    uses: amqp-rs/actions/.github/workflows/reusable-semver.yml@main

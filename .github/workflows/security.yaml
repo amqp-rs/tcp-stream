@@ -11,23 +11,11 @@ on:
     - cron: "0 12 * * 1"
 
 jobs:
-  security_audit:
-    if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-    steps:
-      - uses: amqp-rs/actions/checkout@main
-      - uses: amqp-rs/actions/security@main
-
-  scheduled_audit:
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+  security:
+    # The widest set: the called workflow narrows it per job, and only its
+    # scheduled audit keeps issues: write.
     permissions:
       contents: read
       checks: write
       issues: write
-    steps:
-      - uses: amqp-rs/actions/checkout@main
-      - uses: amqp-rs/actions/security@main
+    uses: amqp-rs/actions/.github/workflows/reusable-security.yml@main

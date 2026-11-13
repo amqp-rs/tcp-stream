@@ -15,48 +15,15 @@ permissions:
 
 jobs:
   build_and_test:
-    runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.rust == 'nightly' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable]
-        include:
-          - os: ubuntu-latest
-            rust: nightly
-          - os: ubuntu-latest
-            rust: beta
-          - os: ubuntu-latest
-            rust: msrv
-    steps:
-      - uses: amqp-rs/actions/checkout@main
-      - uses: amqp-rs/actions/windows-setup-tls-env@main
-      - uses: amqp-rs/actions/build@main
-        with:
-          rust: ${{ matrix.rust }}
-          test: 'false'
-      - name: Run tests for each TLS backend and runtime
-        shell: bash
-        run: |
-          failed=0
-          if ! cargo test --locked --no-fail-fast; then
-            failed=1
-          fi
-          for features in \
-            "" \
-            "futures" \
-            "rustls,futures" \
-            "native-tls-futures,tokio" \
-            "openssl-futures,smol" \
-            "rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor"
-          do
-            test_args=(--locked --no-fail-fast --no-default-features)
-            if [[ -n "$features" ]]; then
-              test_args+=(--features "$features")
-            fi
-            if ! cargo test "${test_args[@]}"; then
-              failed=1
-            fi
-          done
-          exit "$failed"
+    uses: amqp-rs/actions/.github/workflows/reusable-build.yml@main
+    with:
+      setup: windows-setup-tls-env
+      # The default run only covers default features: also test plaintext
+      # (no features), and each TLS backend with a runtime.
+      test-runs: --no-default-features
+      test-features: |
+        futures
+        rustls,futures
+        native-tls-futures,tokio
+        openssl-futures,smol
+        rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor
