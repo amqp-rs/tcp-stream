@@ -103,12 +103,9 @@ fn native_tls_connector_builder(
         };
         builder.identity(native_identity);
     }
-    if let Some(cert_chain) = config.cert_chain {
-        for cert in crate::pem::custom_roots(cert_chain)? {
-            builder.add_root_certificate(
-                Certificate::from_der(&cert[..]).map_err(crate::invalid_data)?,
-            );
-        }
+    for cert in crate::pem::custom_roots(config.cert_chain)? {
+        builder
+            .add_root_certificate(Certificate::from_der(&cert[..]).map_err(crate::invalid_data)?);
     }
     Ok(builder)
 }

@@ -106,13 +106,11 @@ pub(crate) fn openssl_connector(config: TLSConfig<'_, '_, '_>) -> io::Result<Ope
         let pkey = pkey.ok_or_else(|| crate::invalid_data("client identity has no private key"))?;
         set_identity(&mut builder, &cert, &pkey, chain).map_err(crate::invalid_data)?;
     }
-    if let Some(cert_chain) = config.cert_chain {
-        for cert in x509_certificates(&crate::pem::custom_roots(cert_chain)?)? {
-            builder
-                .cert_store_mut()
-                .add_cert(cert)
-                .map_err(crate::invalid_data)?;
-        }
+    for cert in x509_certificates(&crate::pem::custom_roots(config.cert_chain)?)? {
+        builder
+            .cert_store_mut()
+            .add_cert(cert)
+            .map_err(crate::invalid_data)?;
     }
     Ok(builder.build())
 }

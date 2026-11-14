@@ -88,9 +88,10 @@ and always reverses PKCS#12 extra certificates, which OpenSSL 3 already returns
 in order; both are documented in the README rather than worked around.
 `TLSConfig::cert_chain` adds roots to the selected store. Reject malformed
 certificates, but let a chain without certificates add no roots: callers such as
-lapin's client-certificate example pass `Some("")`. Every backend parses them
-with `pem::custom_roots`, which skips `TRUSTED CERTIFICATE` objects as OpenSSL
-does: their trust settings can restrict or reject a root. The rustls platform
+lapin's client-certificate example pass `Some("")`. Every backend gets them
+from `pem::custom_roots`, which returns no root for an unset chain and skips
+`TRUSTED CERTIFICATE` objects as OpenSSL does: their trust settings can
+restrict or reject a root. The rustls platform
 verifier rejects extra roots on Android; keep that limitation documented with
 the field.
 OpenSSL client identity certificates remain in leaf-to-root order: `PKCS12_parse`

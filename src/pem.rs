@@ -6,12 +6,16 @@ use rustls_pki_types::{
 };
 use std::io;
 
-/// The custom roots of `TLSConfig::cert_chain`, or `InvalidData` if one of its
-/// certificates is malformed. A chain without certificates adds no roots.
+/// The custom roots of `TLSConfig::cert_chain`, for every backend: none if it
+/// is unset or holds no certificate, or `InvalidData` if one of its
+/// certificates is malformed.
 ///
 /// `TRUSTED CERTIFICATE` objects are skipped, as OpenSSL's certificate reader
 /// skips them: their trust settings can restrict or reject the root.
-pub(crate) fn custom_roots(cert_chain: &str) -> io::Result<Vec<CertificateDer<'static>>> {
+pub(crate) fn custom_roots(cert_chain: Option<&str>) -> io::Result<Vec<CertificateDer<'static>>> {
+    let Some(cert_chain) = cert_chain else {
+        return Ok(Vec::new());
+    };
     pem_certificates(cert_chain.as_bytes())
         .ok_or_else(|| crate::invalid_data("custom certificate chain is malformed"))
 }
@@ -503,10 +507,12 @@ pub(crate) mod tests {
     #[test]
     fn custom_roots_skip_trusted_certificates() {
         let certs = chain();
+        assert!(custom_roots(None).unwrap().is_empty());
         let trusted = encode("TRUSTED CERTIFICATE", &certs[0], "\n");
-        assert!(custom_roots(&trusted).unwrap().is_empty());
+        assert!(custom_roots(Some(&trusted)).unwrap().is_empty());
         let legacy = encode("X509 CERTIFICATE", &certs[1], "\n");
-        assert_eq!(custom_roots(&(trusted + &legacy)).unwrap(), &certs[1..2]);
+        let roots = custom_roots(Some(&(trusted + &legacy))).unwrap();
+        assert_eq!(roots, &certs[1..2]);
     }
 
     #[test]

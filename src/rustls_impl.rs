@@ -32,16 +32,13 @@ fn update_rustls_config(
     c: &mut RustlsConnectorConfig,
     config: &TLSConfig<'_, '_, '_>,
 ) -> io::Result<()> {
-    if let Some(cert_chain) = config.cert_chain {
-        let certs = crate::pem::custom_roots(cert_chain)?;
-        // Custom roots are explicit configuration, so reject invalid entries
-        // before the connector's best-effort root loading can discard them.
-        for cert in &certs {
-            rustls_connector::webpki::anchor_from_trusted_cert(cert)
-                .map_err(crate::invalid_data)?;
-        }
-        c.add_parsable_certificates(certs);
+    let certs = crate::pem::custom_roots(config.cert_chain)?;
+    // Custom roots are explicit configuration, so reject invalid entries
+    // before the connector's best-effort root loading can discard them.
+    for cert in &certs {
+        rustls_connector::webpki::anchor_from_trusted_cert(cert).map_err(crate::invalid_data)?;
     }
+    c.add_parsable_certificates(certs);
     Ok(())
 }
 
