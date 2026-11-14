@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## Commands
 
@@ -8,10 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo build                                              # build
 cargo test                                               # run tests
 cargo test --no-default-features                         # test the plaintext-only build
-cargo check --all --bins --examples --tests --all-features  # check all feature combinations
-cargo clippy --all-features -- -W clippy::all            # lint (CI standard)
+cargo check --all --bins --examples --tests --all-features  # check with every feature enabled
 cargo fmt --all                                          # format
 cargo fmt --all -- --check                               # check formatting without changing files
+
+# What CI runs, with warnings denied (needs cargo-hack):
+RUSTFLAGS="-D warnings" cargo hack check --each-feature --workspace --all-targets --locked
+cargo hack clippy --each-feature --workspace --all-targets --locked -- -D warnings
 ```
 
 Minimum supported Rust version: **1.89.0** (Rust 2024 edition).

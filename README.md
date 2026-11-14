@@ -10,10 +10,14 @@
 
 </div>
 
-Wraps `std::net::TcpStream` in a `TcpStream` enum that can be upgraded to a
-TLS-encrypted stream via `TcpStream::into_tls`. Supported backends are rustls
-(default), native-tls, and OpenSSL. Async `futures-io` trait implementations
-are provided when the `futures` feature is enabled.
+`tcp-stream` gives a client one stream type for plaintext and TLS connections:
+connect over TCP, then upgrade the same value to TLS when the URL asks for it,
+and the code that reads and writes stays the same whichever TLS library is
+compiled in. rustls, native-tls and OpenSSL are Cargo features, a nonblocking
+socket can drive the handshake itself, and with the `futures` feature
+`AsyncTcpStream` does the same for `futures-io` transports. It is the
+connection layer of [amq-protocol](https://crates.io/crates/amq-protocol) and
+[lapin](https://crates.io/crates/lapin).
 
 ## Feature flags
 
@@ -87,7 +91,7 @@ When multiple store features are enabled, the priority is
 | Flag | Notes |
 |------|-------|
 | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
-| `rustls--ring` | Uses ring (more portable, e.g. builds on Windows) |
+| `rustls--ring` | Uses ring (more portable) |
 
 With neither provider feature, the application can install a rustls
 `CryptoProvider` as the process default before its first connection. Failing
@@ -176,12 +180,15 @@ and async runtime, run:
 cargo test --locked
 cargo test --locked --no-default-features
 cargo test --locked --no-default-features --features futures
+cargo test --locked --no-default-features --features rustls,futures
 cargo test --locked --no-default-features --features native-tls-futures,tokio
 cargo test --locked --no-default-features --features openssl-futures,smol
 cargo test --locked --no-default-features --features rustls-futures,rustls--ring,rustls-webpki-roots-certs,async-global-executor
 ```
 
-CI runs these configurations individually. Regression tests cover raw socket
+CI runs these configurations individually; `rustls,futures` is the only one
+with a backend that the synchronous upgrade can use and the async one cannot.
+Regression tests cover raw socket
 readiness, TLS hostname and trust-root rejection, incomplete client identities,
 NUL input rejection, and noninteractive encrypted-key errors. Async OpenSSL tests
 exercise cancelled writes, reader/writer wakeups, accepted output sent through
