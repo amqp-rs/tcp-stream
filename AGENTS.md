@@ -56,7 +56,9 @@ its certificate store in order: `rustls-platform-verifier` → `rustls-native-ce
 → `rustls-webpki-roots-certs` → custom roots only.
 
 Async runtime is selected via `async-rs`: `tokio` (default), `smol`, or
-`async-global-executor`. Async TLS selects `rustls-futures` (default) →
+`async-global-executor`. Runtime features can be combined; connection methods use
+the caller's reactor rather than selecting a runtime by feature priority.
+Async TLS selects `rustls-futures` (default) →
 `openssl-futures` → `native-tls-futures`. The `futures` feature alone enables I/O
 traits without enabling async TLS. `rustls-futures` is a default feature, so the
 docs must tell users of another async backend to disable default features.

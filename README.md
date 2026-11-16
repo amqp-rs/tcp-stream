@@ -21,7 +21,7 @@ connection layer of [amq-protocol](https://crates.io/crates/amq-protocol) and
 
 ## Feature flags
 
-### Async runtime (pick exactly one)
+### Async runtimes (enable the runtimes your application uses)
 
 | Flag | Notes |
 |------|-------|
@@ -29,7 +29,10 @@ connection layer of [amq-protocol](https://crates.io/crates/amq-protocol) and
 | `smol` | Uses the smol executor |
 | `async-global-executor` | Uses async-global-executor |
 
-### TLS backend
+Runtime features can be combined. Async connection methods use the reactor
+supplied by the caller; features do not choose it implicitly.
+
+### TLS backend (`rustls` is the default)
 
 | Flag | Notes |
 |------|-------|
@@ -37,7 +40,7 @@ connection layer of [amq-protocol](https://crates.io/crates/amq-protocol) and
 | `native-tls` | TLS via the platform's native library |
 | `openssl` | TLS via OpenSSL |
 
-### Async TLS
+### Async TLS (`rustls-futures` is the default)
 
 | Flag | Notes |
 |------|-------|
@@ -66,7 +69,7 @@ unification can enable a backend that a dependent crate does not enable itself.
 Neither tells whether the backend can connect: rustls, for instance, panics
 without a crypto provider.
 
-### Rustls certificate store (when `rustls` is active)
+### Rustls certificate store (only when `rustls` is active)
 
 | Flag | Notes |
 |------|-------|

@@ -17,13 +17,16 @@
 //!
 //! # Feature flags
 //!
-//! ## Async runtime (pick exactly one)
+//! ## Async runtimes (enable the runtimes your application uses)
 //!
 //! | Flag | Notes |
 //! |------|-------|
 //! | `tokio` *(default)* | Requires a running Tokio runtime |
 //! | `smol` | Uses the smol executor |
 //! | `async-global-executor` | Uses async-global-executor |
+//!
+//! Runtime features can be combined. Async connection methods use the reactor
+//! supplied by the caller; features do not choose it implicitly.
 //!
 //! ## TLS backend (`rustls` is the default)
 //!
