@@ -1,6 +1,6 @@
 [package]
 name = "tcp-stream"
-version = "0.34.17"
+version = "0.34.18"
 edition = "2024"
 authors = ["Marc-Antoine Perennou <Marc-Antoine@Perennou.com>"]
 description = "std::net::TcpStream on steroids"
@@ -49,10 +49,10 @@ cfg-if = "^1.0"
 # rustix does not build on the excluded Unix targets: keep this list in sync with
 # the socket check selection in src/lib.rs.
 [target.'cfg(all(unix, not(any(target_os = "nuttx", target_os = "qnx", target_os = "rtems", target_os = "vxworks"))))'.dependencies]
-rustix = { version = "^1.1", features = ["event", "net"] }
+rustix = { version = "^1.1.6", features = ["event", "net"] }
 
 [target.'cfg(any(windows, target_os = "wasi"))'.dependencies]
-rustix = { version = "^1.1", features = ["event"] }
+rustix = { version = "^1.1.6", features = ["event"] }
 
 [dependencies.async-native-tls]
 version = "^0.6"
@@ -71,15 +71,15 @@ default-features = false
 optional = true
 
 [dependencies.futures-io]
-version = "^0.3"
+version = "^0.3.31"
 optional = true
 
 [dependencies.native-tls]
-version  = "^0.2"
+version  = "^0.2.9"
 optional = true
 
 [dependencies.openssl]
-version  = "^0.10.72"
+version  = "^0.10.80"
 optional = true
 
 [dependencies.p12-keystore]
@@ -99,7 +99,7 @@ optional         = true
 default-features = false
 
 [dependencies.rustls-pki-types]
-version          = "^1.9"
+version          = "^1.12"
 optional         = true
 default-features = false
 features         = ["std"]
