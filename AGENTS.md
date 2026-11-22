@@ -74,6 +74,10 @@ the upgrade with its constant, using arguments that every backend rejects before
 connecting, so they need no crypto provider; the async one runs on `NoIo`, a
 stream that panics on I/O.
 
+The connectors that `into_tls()` builds set no minimum TLS version, so each
+library's applies, as the crate docs and the README describe. Raising it would
+refuse servers that connect today: it is a breaking change, made on `next`.
+
 Rustls needs a crypto provider: the `rustls--aws_lc_rs` (default) or `rustls--ring` feature, or a
 process-level provider installed before connecting. Without either, the required
 rustls-connector 0.23.10 falls back to rustls's own selection from its crate features and

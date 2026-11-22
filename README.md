@@ -40,6 +40,15 @@ supplied by the caller; features do not choose it implicitly.
 | `native-tls` | TLS via the platform's native library |
 | `openssl` | TLS via OpenSSL |
 
+tcp-stream sets no minimum TLS version: each backend keeps its library's.
+rustls implements nothing older than TLS 1.2. native-tls accepts TLS 1.0 by
+default before its 0.2.15 release, and TLS 1.2 from it. OpenSSL refuses
+SSL 3.0 and accepts TLS 1.0 unless the library or the system configuration
+raises the minimum: OpenSSL 3.0 and newer only negotiate TLS 1.0 and 1.1 at
+security level 0. To require a newer version, configure the connector (or,
+for the async Native TLS upgrade, its builder) yourself and pass it to
+`into_native_tls()` or `into_openssl()`.
+
 ### Async TLS (`rustls-futures` is the default)
 
 | Flag | Notes |
