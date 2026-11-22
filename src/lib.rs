@@ -140,6 +140,13 @@ use std::{
 mod rustls_impl;
 #[cfg(feature = "rustls")]
 pub use rustls_impl::*;
+// The crypto provider features enable rustls-connector to pass the provider on to it: without
+// the rustls feature nothing else names the crate, and cargo would report it unused
+#[cfg(all(
+    any(feature = "rustls--aws_lc_rs", feature = "rustls--ring"),
+    not(feature = "rustls")
+))]
+use rustls_connector as _;
 
 #[cfg(any(feature = "rustls", feature = "native-tls", feature = "openssl"))]
 mod pem;
