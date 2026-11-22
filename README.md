@@ -106,6 +106,8 @@ When multiple store features are enabled, the priority is
 |------|-------|
 | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
 | `rustls--ring` | Uses ring (more portable) |
+| `rustls-aws-lc-rs` | Alias of `rustls--aws_lc_rs`, and its name in the next major |
+| `rustls-ring` | Alias of `rustls--ring`, and its name in the next major |
 
 With neither provider feature, the application can install a rustls
 `CryptoProvider` as the process default before its first connection. Failing

@@ -42,6 +42,8 @@ vendored-openssl          = ["openssl", "openssl/vendored"]
 # See https://docs.rs/rustls/latest/rustls/#crate-features. for more info
 rustls--aws_lc_rs         = ["dep:rustls-connector", "rustls-connector/rustls--aws_lc_rs"] # default, but doesn't build everywhere
 rustls--ring              = ["dep:rustls-connector", "rustls-connector/rustls--ring"] # more compatible, (e.g., easily builds on Windows)
+rustls-aws-lc-rs          = ["rustls--aws_lc_rs"] # the name the next major keeps
+rustls-ring               = ["rustls--ring"] # the name the next major keeps
 
 [dependencies]
 cfg-if = "^1.0"

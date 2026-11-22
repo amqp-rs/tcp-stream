@@ -87,6 +87,8 @@
 //! |------|-------|
 //! | `rustls--aws_lc_rs` *(default)* | Uses aws-lc-rs |
 //! | `rustls--ring` | Uses ring (more portable) |
+//! | `rustls-aws-lc-rs` | Alias of `rustls--aws_lc_rs`, and its name in the next major |
+//! | `rustls-ring` | Alias of `rustls--ring`, and its name in the next major |
 //!
 //! Without either feature, install a process-level rustls crypto provider before
 //! connecting. Otherwise, rustls-connector uses the provider that rustls selects
