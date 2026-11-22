@@ -19,6 +19,8 @@ socket can drive the handshake itself, and with the `futures` feature
 connection layer of [amq-protocol](https://crates.io/crates/amq-protocol) and
 [lapin](https://crates.io/crates/lapin).
 
+The minimum supported Rust version is 1.89.
+
 ## Feature flags
 
 ### Async runtimes (enable the runtimes your application uses)

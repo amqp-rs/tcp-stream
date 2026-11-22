@@ -17,7 +17,9 @@ RUSTFLAGS="-D warnings" cargo hack check --each-feature --workspace --all-target
 cargo hack clippy --each-feature --workspace --all-targets --locked -- -D warnings
 ```
 
-Minimum supported Rust version: **1.89.0** (Rust 2024 edition).
+Minimum supported Rust version: **1.89.0** (Rust 2024 edition), the
+`rust-version` of `Cargo.toml`, which the README states before its first
+section.
 
 ## Architecture
 
