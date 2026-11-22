@@ -235,8 +235,11 @@ function, so tests simulate attempts instead of depending on network timing.
 
 TLS tests use local listeners and the fixture trust root. Native TLS tests use
 the PKCS#12 identity for portability across its platforms. Documentation examples
-are compile-only and do not require external network access. Exercise default,
-no-default, and individual backend `-futures` builds when changing feature dispatch.
+are compile-only and do not require external network access. `ReadmeDoctests` in
+`src/lib.rs` compiles the README's Rust examples as doctests in every feature
+set, so they are `no_run` too and must build without a TLS backend. Exercise
+default, no-default, and individual backend `-futures` builds when changing
+feature dispatch.
 
 CI retains the shared action's compile checks and runs default, plaintext,
 futures-only, rustls with `futures` but neither async TLS nor a crypto provider

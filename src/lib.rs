@@ -888,3 +888,8 @@ mod sys;
 
 #[cfg(test)]
 mod tests;
+
+// Compiles the README's examples as doctests.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

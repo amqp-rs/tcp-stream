@@ -141,7 +141,7 @@ PKCS#12 passwords with `InvalidInput`.
 
 To connect to a remote server:
 
-```rust
+```rust,no_run
 use tcp_stream::{TcpStream, TLSConfig};
 
 use std::io::{Read, Write};
