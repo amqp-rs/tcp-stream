@@ -1,7 +1,7 @@
 <div align="center">
 
 [![API Docs](https://docs.rs/tcp-stream/badge.svg)](https://docs.rs/tcp-stream)
-[![Build status](https://github.com/amqp-rs/tcp-stream/actions/workflows/build-and-test.yaml/badge.svg)](https://github.com/amqp-rs/tcp-stream/actions/workflows/build-and-test.yaml)
+[![Build status](https://github.com/amqp-rs/tcp-stream/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/amqp-rs/tcp-stream/actions/workflows/build-and-test.yml)
 [![Downloads](https://img.shields.io/crates/d/tcp-stream.svg)](https://crates.io/crates/tcp-stream)
 [![Dependency Status](https://deps.rs/repo/github/amqp-rs/tcp-stream/status.svg)](https://deps.rs/repo/github/amqp-rs/tcp-stream)
 [![LICENSE](https://img.shields.io/crates/l/tcp-stream)](LICENSE)
