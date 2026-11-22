@@ -21,6 +21,11 @@ Minimum supported Rust version: **1.89.0** (Rust 2024 edition), the
 `rust-version` of `Cargo.toml`, which the README states before its first
 section.
 
+The workflows in `.github/workflows/` call the reusable workflows of
+`amqp-rs/actions` at `@main`. `.github/dependabot.yml` only tracks `cargo`,
+grouping all dependency updates in one weekly pull request: `amqp-rs/actions`
+bumps the third-party actions itself.
+
 ## Architecture
 
 `tcp-stream` is a thin wrapper library that adds TLS support to `std::net::TcpStream`. The central type is the `TcpStream` enum (`#[non_exhaustive]`) with one variant per TLS backend:
