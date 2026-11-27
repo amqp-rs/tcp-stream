@@ -86,7 +86,7 @@ optional = true
 
 [dependencies.p12-keystore]
 # Keep 0.2 until the newer parser's prerelease dependencies are stable.
-version = "^0.2"
+version = "^0.4"
 optional = true
 
 [dependencies.pkcs8]
